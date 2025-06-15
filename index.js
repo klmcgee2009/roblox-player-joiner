@@ -34,20 +34,6 @@ async function getPresence(userId) {
   return res.data.userPresences[0];
 }
 
-async function getPublicServers(placeId) {
-  const servers = [];
-  let cursor = '';
-  while (servers.length < 100) {
-    const res = await axios.get(
-      `https://games.roblox.com/v1/games/${placeId}/servers/Public?limit=100&cursor=${cursor}`
-    );
-    servers.push(...res.data.data);
-    if (!res.data.nextPageCursor) break;
-    cursor = res.data.nextPageCursor;
-  }
-  return servers;
-}
-
 app.get('/find/:username', async (req, res) => {
   try {
     const username = req.params.username;
@@ -64,18 +50,16 @@ app.get('/find/:username', async (req, res) => {
     }
 
     const placeId = presence.lastLocation.placeId;
-    const servers = await getPublicServers(placeId);
+    const jobId = presence.gameId;  // This is the server instance ID (JobId)
 
-    for (const server of servers) {
-      if (server.playerIds && server.playerIds.includes(userId)) {
-        return res.json({
-          placeId,
-          jobId: server.id
-        });
-      }
+    if (!jobId) {
+      return res.status(404).json({ error: 'User server JobId not available' });
     }
 
-    return res.status(404).json({ error: 'User not found in any public server' });
+    return res.json({
+      placeId,
+      jobId
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong' });
@@ -83,5 +67,4 @@ app.get('/find/:username', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-// Bind to 0.0.0.0 as required by Render to avoid 502 errors
 app.listen(PORT, '0.0.0.0', () => console.log(`API Server running on port ${PORT}`));
