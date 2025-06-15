@@ -58,14 +58,9 @@ app.get('/find/:username', async (req, res) => {
     }
 
     const presence = await getPresence(userId);
-    console.log('Presence data:', presence);
 
     if (presence.userPresenceType !== 2) {
       return res.status(404).json({ error: 'User is not in a public game' });
-    }
-
-    if (!presence.lastLocation || !presence.lastLocation.placeId) {
-      return res.status(404).json({ error: 'User presence location data missing' });
     }
 
     const placeId = presence.lastLocation.placeId;
@@ -88,4 +83,5 @@ app.get('/find/:username', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`API Server running on port ${PORT}`));
+// Bind to 0.0.0.0 as required by Render to avoid 502 errors
+app.listen(PORT, '0.0.0.0', () => console.log(`API Server running on port ${PORT}`));
