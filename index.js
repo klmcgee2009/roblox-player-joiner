@@ -1,68 +1,85 @@
-require('dotenv').config();
 const express = require('express');
-const axios = require('axios');
-
 const app = express();
+
 const PORT = process.env.PORT || 10000;
-const COOKIE = process.env.ROBLOSECURITY;
 
-let totalSearches = 0; // Count how many players have been searched
+// Example in-memory player graph (adjacency list)
+// Key = username, value = array of connected usernames
+const playerGraph = {
+  "Alice": ["Bob", "Charlie"],
+  "Bob": ["Alice", "Diana", "Eve"],
+  "Charlie": ["Alice", "Frank"],
+  "Diana": ["Bob", "Grace"],
+  "Eve": ["Bob"],
+  "Frank": ["Charlie"],
+  "Grace": ["Diana", "Heidi"],
+  "Heidi": ["Grace", "Ivan"],
+  "Ivan": ["Heidi", "Judy"],
+  "Judy": ["Ivan"]
+};
 
-app.get('/search/:username', async (req, res) => {
-  const username = req.params.username;
-  totalSearches++; // Increase the counter
-  console.log(`[SEARCH #${totalSearches}] Searching for user: ${username}`);
+// BFS to find shortest path between two players
+function findShortestPath(graph, start, end) {
+  if (!graph[start] || !graph[end]) {
+    return null; // One or both players not in graph
+  }
 
-  try {
-    // Get userId from username
-    const userResponse = await axios.post(
-      `https://users.roblox.com/v1/usernames/users`,
-      { usernames: [username] },
-      { headers: { 'Content-Type': 'application/json' } }
-    );
+  let queue = [[start]];
+  let visited = new Set();
 
-    const userData = userResponse.data.data[0];
-    if (!userData) {
-      return res.json({ error: 'User not found', searched: totalSearches });
+  while (queue.length > 0) {
+    let path = queue.shift();
+    let node = path[path.length - 1];
+
+    if (node === end) {
+      return path;
     }
 
-    const userId = userData.id;
+    if (!visited.has(node)) {
+      visited.add(node);
 
-    // Get presence (online status)
-    const presenceResponse = await axios.post(
-      `https://presence.roblox.com/v1/presence/users`,
-      { userIds: [userId] },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Cookie': `.ROBLOSECURITY=${COOKIE}`
-        }
+      let neighbors = graph[node];
+      for (let neighbor of neighbors) {
+        let newPath = path.slice();
+        newPath.push(neighbor);
+        queue.push(newPath);
       }
-    );
-
-    const presenceInfo = presenceResponse.data.userPresences[0];
-    res.json({
-      searched: totalSearches,
-      username: userData.name,
-      userId: userData.id,
-      displayName: userData.displayName,
-      status: presenceInfo.userPresenceType === 2 ? 'In Game' :
-              presenceInfo.userPresenceType === 1 ? 'Online' : 'Offline',
-      lastLocation: presenceInfo.lastLocation,
-      placeId: presenceInfo.lastLocation?.placeId || null,
-      universeId: presenceInfo.universeId || null
-    });
-  } catch (error) {
-    console.error(`[ERROR] While searching for ${username}:`, error.message);
-    res.status(500).json({ error: 'Internal server error', searched: totalSearches });
+    }
   }
-});
 
-// Optional endpoint to show search count
-app.get('/stats', (req, res) => {
-  res.json({ totalSearches });
+  return null; // No path found
+}
+
+app.get('/search-path', (req, res) => {
+  const fromUser = req.query.from;
+  const toUser = req.query.to;
+
+  if (!fromUser || !toUser) {
+    return res.status(400).json({ error: "Please provide 'from' and 'to' query parameters." });
+  }
+
+  const path = findShortestPath(playerGraph, fromUser, toUser);
+
+  if (!path) {
+    return res.json({
+      message: `No connection path found between '${fromUser}' and '${toUser}'.`,
+      path: []
+    });
+  }
+
+  // Format the path as objects with username and dummy userId (for demo)
+  const formattedPath = path.map((username, idx) => ({
+    userId: 1000 + idx, // Dummy IDs
+    username
+  }));
+
+  return res.json({
+    message: `Found connection path between '${fromUser}' and '${toUser}'.`,
+    path: formattedPath,
+    length: formattedPath.length
+  });
 });
 
 app.listen(PORT, () => {
-  console.log(`Roblox Player Search API running on port ${PORT}`);
+  console.log(`Roblox Player Connection API running on port ${PORT}`);
 });
