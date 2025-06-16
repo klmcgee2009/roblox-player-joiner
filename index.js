@@ -5,16 +5,15 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
-// Read the ROBLOSECURITY cookie from environment variables
 const ROBLOSECURITY = process.env.ROBLOSECURITY;
 
 if (!ROBLOSECURITY) {
-  console.error('❌ Error: ROBLOSECURITY environment variable is not set.');
+  console.error('❌ Error: .ROBLOSECURITY token not set in environment.');
   process.exit(1);
 }
 
 const HEADERS = {
-  'Cookie': `.ROBLOSECURITY=${ROBLOSECURITY}`,
+  Cookie: `.ROBLOSECURITY=${ROBLOSECURITY}`,
   'User-Agent': 'Roblox/WinInet',
   'Content-Type': 'application/json'
 };
@@ -29,7 +28,7 @@ async function getUserId(username) {
   return res.data.data[0]?.id || null;
 }
 
-// Get presence info from userId
+// Get presence data
 async function getPresence(userId) {
   const res = await axios.post(
     'https://presence.roblox.com/v1/presence/users',
@@ -39,7 +38,6 @@ async function getPresence(userId) {
   return res.data.userPresences[0] || null;
 }
 
-// API endpoint to find user presence
 app.get('/find/:username', async (req, res) => {
   try {
     const username = req.params.username;
@@ -66,15 +64,11 @@ app.get('/find/:username', async (req, res) => {
     };
 
     return res.json(response);
-
   } catch (err) {
-    console.error('❌ API error:', err.message);
-    return res.status(500).json({ error: 'Something went wrong' });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong' });
   }
 });
 
-// Start server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ API server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 API running on port ${PORT}`));
