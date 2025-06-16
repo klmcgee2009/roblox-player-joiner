@@ -1,146 +1,81 @@
-require('dotenv').config();
-const express = require('express');
-const axios = require('axios');
+const express = require("express");
+const axios = require("axios");
+require("dotenv").config();
 
 const app = express();
-app.use(express.json());
-
+const PORT = process.env.PORT || 3000;
 const ROBLOSECURITY = process.env.ROBLOSECURITY;
-if (!ROBLOSECURITY) {
-  console.error('Error: ROBLOSECURITY is not set in .env');
-  process.exit(1);
-}
 
-const HEADERS = {
+const headers = {
   Cookie: `.ROBLOSECURITY=${ROBLOSECURITY}`,
-  'User-Agent': 'Roblox/WinInet',
-  'Content-Type': 'application/json',
+  "User-Agent": "Roblox/WinInet",
+  "Content-Type": "application/json"
 };
 
-// Helper: Get userId from username
+// Get user ID from username
 async function getUserId(username) {
-  const res = await axios.post(
-    'https://users.roblox.com/v1/usernames/users',
-    { usernames: [username] },
-    { headers: HEADERS }
-  );
-  return res.data.data[0]?.id || null;
+  const res = await axios.get(`https://users.roblox.com/v1/usernames/users`, {
+    data: { usernames: [username] },
+    headers
+  });
+  if (res.data.data.length === 0) return null;
+  return res.data.data[0].id;
 }
 
-// Helper: Get user presence info
+// Get user presence (online/offline/in-game)
 async function getUserPresence(userId) {
-  const res = await axios.post(
-    'https://presence.roblox.com/v1/presence/users',
-    { userIds: [userId] },
-    { headers: HEADERS }
-  );
-  return res.data.userPresences[0] || null;
+  const res = await axios.post(`https://presence.roblox.com/v1/presence/users`, {
+    userIds: [userId]
+  }, { headers });
+  return res.data.userPresences[0];
 }
 
-// Helper: Get servers for universeId (with pagination)
-async function getAllServers(universeId) {
-  let servers = [];
-  let cursor = null;
-
-  while (true) {
-    const url = `https://games.roblox.com/v1/games/${universeId}/servers/Public?sortOrder=Asc&limit=100${cursor ? `&cursor=${cursor}` : ''}`;
-    const res = await axios.get(url, { headers: HEADERS });
-    servers = servers.concat(res.data.data);
-    cursor = res.data.nextPageCursor;
-    if (!cursor) break;
+// Try to get the server or game info
+async function getGameInstanceData(universeId) {
+  try {
+    const res = await axios.get(`https://games.roblox.com/v1/games?universeIds=${universeId}`, {
+      headers
+    });
+    return res.data.data[0];
+  } catch (err) {
+    return null;
   }
-  return servers;
 }
 
-// Main: Find server by scanning players
-async function findServerByUsername(universeId, username, onProgress) {
-  const servers = await getAllServers(universeId);
-  let playersSearched = 0;
-
-  for (const server of servers) {
-    try {
-      const res = await axios.get(
-        `https://games.roblox.com/v1/games/${universeId}/servers/${server.id}/players`,
-        { headers: HEADERS }
-      );
-
-      playersSearched += res.data.players.length;
-      if (onProgress) onProgress(playersSearched);
-
-      if (res.data.players.some(p => p.userName.toLowerCase() === username.toLowerCase())) {
-        return server;
-      }
-    } catch (e) {
-      // Ignore errors and continue
-    }
-  }
-  return null;
-}
-
-// Route: SSE stream progress while finding player
-app.get('/find-progress/:username', async (req, res) => {
+app.get("/search/:username", async (req, res) => {
   const username = req.params.username;
-
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders();
 
   try {
     const userId = await getUserId(username);
-    if (!userId) {
-      res.write(`data: ${JSON.stringify({ error: "User not found" })}\n\n`);
-      return res.end();
-    }
+    if (!userId) return res.status(404).json({ error: "User not found" });
 
     const presence = await getUserPresence(userId);
-    if (!presence || presence.userPresenceType !== 2) {
-      res.write(`data: ${JSON.stringify({ error: "User not in game or presence unavailable" })}\n\n`);
-      return res.end();
-    }
+    const status = presence.userPresenceType;
+    let response = {
+      username,
+      userId,
+      status: status === 0 ? "Offline" : status === 1 ? "Online" : "In Game"
+    };
 
-    const universeId = presence.universeId || presence.lastLocation?.universeId;
-    if (!universeId) {
-      res.write(`data: ${JSON.stringify({ error: "Universe ID not found" })}\n\n`);
-      return res.end();
-    }
+    if (presence.userPresenceType === 2) { // In Game
+      response.placeId = presence.lastLocation;
+      response.game = presence.lastLocation;
+      response.universeId = presence.universeId;
 
-    // If presence has gameId, return immediately
-    if (presence.gameId) {
-      res.write(`data: ${JSON.stringify({
-        message: "Found user by presence",
-        username,
-        userId,
-        universeId,
-        serverId: presence.gameId
-      })}\n\n`);
-      return res.end();
-    }
-
-    // Otherwise, scan all servers and stream progress
-    await findServerByUsername(universeId, username, (playersSearched) => {
-      res.write(`data: ${JSON.stringify({ playersSearched })}\n\n`);
-    }).then(server => {
-      if (server) {
-        res.write(`data: ${JSON.stringify({
-          message: "Found user by scanning servers",
-          username,
-          userId,
-          universeId,
-          serverId: server.id
-        })}\n\n`);
-      } else {
-        res.write(`data: ${JSON.stringify({ error: "User not found in any active servers" })}\n\n`);
+      const gameInfo = await getGameInstanceData(presence.universeId);
+      if (gameInfo) {
+        response.placeName = gameInfo.name;
+        response.joinScript = `roblox://placeId=${presence.placeId}&universeId=${presence.universeId}`;
       }
-      res.end();
-    });
+    }
 
+    res.json(response);
   } catch (err) {
-    console.error(err);
-    res.write(`data: ${JSON.stringify({ error: "Internal Server Error" })}\n\n`);
-    res.end();
+    console.error(err.message);
+    res.status(500).json({ error: "Something went wrong." });
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Roblox Player Search API running on port ${PORT}`);
+});
