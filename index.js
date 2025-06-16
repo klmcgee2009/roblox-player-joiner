@@ -1,19 +1,21 @@
-require('dotenv').config();
+require('dotenv').config(); // Load env variables from .env file
+
 const express = require('express');
 const axios = require('axios');
 
 const app = express();
 app.use(express.json());
 
+// Get ROBLOSECURITY from environment variables
 const ROBLOSECURITY = process.env.ROBLOSECURITY;
 
 if (!ROBLOSECURITY) {
-  console.error('❌ Error: .ROBLOSECURITY token not set in environment.');
+  console.error('❌ ROBLOSECURITY environment variable not set!');
   process.exit(1);
 }
 
 const HEADERS = {
-  Cookie: `.ROBLOSECURITY=${ROBLOSECURITY}`,
+  'Cookie': `.ROBLOSECURITY=${ROBLOSECURITY}`,
   'User-Agent': 'Roblox/WinInet',
   'Content-Type': 'application/json'
 };
@@ -28,7 +30,7 @@ async function getUserId(username) {
   return res.data.data[0]?.id || null;
 }
 
-// Get presence data
+// Get presence info from userId
 async function getPresence(userId) {
   const res = await axios.post(
     'https://presence.roblox.com/v1/presence/users',
@@ -50,9 +52,10 @@ app.get('/find/:username', async (req, res) => {
     const presence = await getPresence(userId);
 
     if (!presence) {
-      return res.status(404).json({ error: 'User presence not available' });
+      return res.status(404).json({ error: 'User presence data not available' });
     }
 
+    // Build the response with all important info
     const response = {
       userId,
       username,
@@ -64,6 +67,7 @@ app.get('/find/:username', async (req, res) => {
     };
 
     return res.json(response);
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong' });
@@ -71,4 +75,4 @@ app.get('/find/:username', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 API running on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`API Server running on port ${PORT}`));
