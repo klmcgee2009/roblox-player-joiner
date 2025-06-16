@@ -1,5 +1,3 @@
-// index.js
-
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
@@ -9,17 +7,17 @@ app.use(express.json());
 
 const ROBLOSECURITY = process.env.ROBLOSECURITY;
 if (!ROBLOSECURITY) {
-  console.error("Missing ROBLOSECURITY token in .env");
+  console.error('Error: ROBLOSECURITY is not set in .env');
   process.exit(1);
 }
 
 const HEADERS = {
-  'Cookie': `.ROBLOSECURITY=${ROBLOSECURITY}`,
+  Cookie: `.ROBLOSECURITY=${ROBLOSECURITY}`,
   'User-Agent': 'Roblox/WinInet',
-  'Content-Type': 'application/json'
+  'Content-Type': 'application/json',
 };
 
-// 1) Get userId from username
+// Helper: Get userId from username
 async function getUserId(username) {
   const res = await axios.post(
     'https://users.roblox.com/v1/usernames/users',
@@ -29,7 +27,7 @@ async function getUserId(username) {
   return res.data.data[0]?.id || null;
 }
 
-// 2) Get user's presence to find universeId and jobId
+// Helper: Get user presence info
 async function getUserPresence(userId) {
   const res = await axios.post(
     'https://presence.roblox.com/v1/presence/users',
@@ -39,87 +37,108 @@ async function getUserPresence(userId) {
   return res.data.userPresences[0] || null;
 }
 
-// 3) List all servers for a universe (paginated)
-async function getAllServers(universeId, cursor = null, servers = []) {
-  let url = `https://games.roblox.com/v1/games/${universeId}/servers/Public?sortOrder=Asc&limit=100`;
-  if (cursor) url += `&cursor=${cursor}`;
+// Helper: Get servers for universeId (with pagination)
+async function getAllServers(universeId) {
+  let servers = [];
+  let cursor = null;
 
-  const res = await axios.get(url, { headers: HEADERS });
-  servers.push(...res.data.data);
-
-  if (res.data.nextPageCursor) {
-    return getAllServers(universeId, res.data.nextPageCursor, servers);
+  while (true) {
+    const url = `https://games.roblox.com/v1/games/${universeId}/servers/Public?sortOrder=Asc&limit=100${cursor ? `&cursor=${cursor}` : ''}`;
+    const res = await axios.get(url, { headers: HEADERS });
+    servers = servers.concat(res.data.data);
+    cursor = res.data.nextPageCursor;
+    if (!cursor) break;
   }
   return servers;
 }
 
-// 4) Find server containing the user in all servers
-async function findServerByUsername(universeId, username) {
+// Main: Find server by scanning players
+async function findServerByUsername(universeId, username, onProgress) {
   const servers = await getAllServers(universeId);
+  let playersSearched = 0;
+
   for (const server of servers) {
-    // each server has a player list? Unfortunately no API for player list directly
-    // We must use Server's endpoint to get players (not officially documented but can be accessed):
-    // https://games.roblox.com/v1/games/{universeId}/servers/{serverId}/players
     try {
       const res = await axios.get(
         `https://games.roblox.com/v1/games/${universeId}/servers/${server.id}/players`,
         { headers: HEADERS }
       );
+
+      playersSearched += res.data.players.length;
+      if (onProgress) onProgress(playersSearched);
+
       if (res.data.players.some(p => p.userName.toLowerCase() === username.toLowerCase())) {
         return server;
       }
     } catch (e) {
-      // ignore errors (likely private or no permission)
+      // Ignore errors and continue
     }
   }
   return null;
 }
 
-app.get('/find/:username', async (req, res) => {
+// Route: SSE stream progress while finding player
+app.get('/find-progress/:username', async (req, res) => {
+  const username = req.params.username;
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
   try {
-    const username = req.params.username;
     const userId = await getUserId(username);
-    if (!userId) return res.status(404).json({ error: "User not found" });
+    if (!userId) {
+      res.write(`data: ${JSON.stringify({ error: "User not found" })}\n\n`);
+      return res.end();
+    }
 
     const presence = await getUserPresence(userId);
-    if (!presence || presence.userPresenceType !== 2) { // 2 means in-game
-      return res.status(404).json({ error: "User not in a game or presence unavailable" });
+    if (!presence || presence.userPresenceType !== 2) {
+      res.write(`data: ${JSON.stringify({ error: "User not in game or presence unavailable" })}\n\n`);
+      return res.end();
     }
 
     const universeId = presence.universeId || presence.lastLocation?.universeId;
-    if (!universeId) return res.status(404).json({ error: "Universe ID not found" });
+    if (!universeId) {
+      res.write(`data: ${JSON.stringify({ error: "Universe ID not found" })}\n\n`);
+      return res.end();
+    }
 
-    // Try to get the jobId (server ID) from presence
+    // If presence has gameId, return immediately
     if (presence.gameId) {
-      return res.json({
-        message: "Found user in game by presence",
+      res.write(`data: ${JSON.stringify({
+        message: "Found user by presence",
         username,
         userId,
         universeId,
-        serverId: presence.gameId // this is JobId (server id)
-      });
+        serverId: presence.gameId
+      })}\n\n`);
+      return res.end();
     }
 
-    // If no direct jobId, search all servers for the user
-    const server = await findServerByUsername(universeId, username);
-
-    if (server) {
-      return res.json({
-        message: "Found user by scanning servers",
-        username,
-        userId,
-        universeId,
-        serverId: server.id,
-        maxPlayers: server.maxPlayers,
-        playing: server.playing,
-      });
-    }
-
-    res.status(404).json({ error: "User not found in any active servers" });
+    // Otherwise, scan all servers and stream progress
+    await findServerByUsername(universeId, username, (playersSearched) => {
+      res.write(`data: ${JSON.stringify({ playersSearched })}\n\n`);
+    }).then(server => {
+      if (server) {
+        res.write(`data: ${JSON.stringify({
+          message: "Found user by scanning servers",
+          username,
+          userId,
+          universeId,
+          serverId: server.id
+        })}\n\n`);
+      } else {
+        res.write(`data: ${JSON.stringify({ error: "User not found in any active servers" })}\n\n`);
+      }
+      res.end();
+    });
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.write(`data: ${JSON.stringify({ error: "Internal Server Error" })}\n\n`);
+    res.end();
   }
 });
 
