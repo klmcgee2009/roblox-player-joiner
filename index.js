@@ -1,65 +1,66 @@
-require("dotenv").config();
-const express = require("express");
-const axios = require("axios");
+const axios = require('axios');
 
-const app = express();
-const PORT = process.env.PORT || 10000;
-
-const ROBLOSECURITY = process.env.ROBLOSECURITY;
-if (!ROBLOSECURITY) {
-  console.error("🚨 Missing ROBLOSECURITY. Set it in your environment.");
-  process.exit(1);
+// Delay helper function
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-const api = axios.create({
-  headers: {
-    Cookie: `.ROBLOSECURITY=${ROBLOSECURITY}`,
-    "User-Agent": "Roblox/WinInet"
-  },
-  timeout: 10000
-});
+// Counter for total searched players
+let searchedCount = 0;
 
-// BFS for friend connections
-app.get("/connections/:fromId/:toId", async (req, res) => {
-  const { fromId, toId } = req.params;
-  const visited = new Set();
-  const queue = [[fromId]];
-  let searchedCount = 0;
-  const maxDepth = 8;
+// Fetch friends of a userId with retry on 429
+async function fetchUserFriends(userId) {
+  try {
+    const url = `https://friends.roblox.com/v1/users/${userId}/friends`;
+    const response = await axios.get(url);
 
-  while (queue.length) {
-    const path = queue.shift();
-    const currentId = path[path.length - 1];
-    if (visited.has(currentId)) continue;
-    visited.add(currentId);
     searchedCount++;
-    console.log(`🔍 (#${searchedCount}) Current path: ${path.join(" → ")}`);
+    console.log(`🔍 (#${searchedCount}) Searched userId: ${userId} → Found ${response.data.data.length} friends`);
 
-    try {
-      const { data } = await api.get(`https://friends.roblox.com/v1/users/${currentId}/friends`);
-      const friends = data.data.map(f => f.id.toString());
-      console.log(`↳ ${currentId} → ${friends.length} friends`);
-
-      if (friends.includes(toId)) {
-        const connection = [...path, toId];
-        console.log(`✅ Found connection: ${connection.join(" → ")}`);
-        return res.json({ searchedCount, connection });
-      }
-
-      if (path.length < maxDepth) {
-        for (const fid of friends) {
-          if (!visited.has(fid)) queue.push([...path, fid]);
-        }
-      }
-    } catch (err) {
-      console.warn(`⚠️ Error for ${currentId}: ${err.response?.status || err.message}`);
+    return response.data.data.map(friend => friend.id);
+  } catch (error) {
+    if (error.response && error.response.status === 429) {
+      console.warn(`⚠️ Rate limited for userId ${userId}. Waiting 3 seconds before retrying...`);
+      await delay(3000);
+      return fetchUserFriends(userId); // retry
+    } else {
+      console.error(`❌ Error fetching userId ${userId}: ${error.message || error}`);
+      return []; // return empty array on error so crawler continues
     }
   }
+}
 
-  return res.status(404).json({
-    error: "No connection found",
-    searchedCount
-  });
-});
+// Main crawl function with BFS-like approach and depth limit
+async function crawl(startUserId, maxDepth = 2) {
+  let queue = [startUserId];
+  let visited = new Set();
+  let depth = 0;
 
-app.listen(PORT, () => console.log(`🚀 Roblox Connection API live on port ${PORT}`));
+  while (queue.length > 0 && depth < maxDepth) {
+    let nextQueue = [];
+
+    for (const userId of queue) {
+      if (visited.has(userId)) continue;
+      visited.add(userId);
+
+      const friends = await fetchUserFriends(userId);
+
+      // Add friends for next level of crawl
+      nextQueue.push(...friends);
+
+      // Wait 1 second between requests to avoid hitting rate limits
+      await delay(1000);
+    }
+
+    queue = nextQueue;
+    depth++;
+  }
+
+  console.log(`✅ Crawling finished. Total searched players: ${searchedCount}`);
+}
+
+// Replace this with the user ID you want to start searching from
+const startingUserId = '681198824';
+
+// Start the crawler
+crawl(startingUserId).catch(err => console.error("Crawler failed:", err));
