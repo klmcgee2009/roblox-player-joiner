@@ -1,7 +1,7 @@
 {
   "name": "roblox-friend-connection-api",
   "version": "1.0.0",
-  "description": "Find connection path between Roblox users via friends",
+  "description": "Find connection path between Roblox users via friends network",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
