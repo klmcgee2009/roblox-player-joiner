@@ -5,7 +5,7 @@ const app = express();
 app.use(express.json());
 
 // Put your Roblox .ROBLOSECURITY cookie here, or set it in environment variable ROBLOSECURITY
-const ROBLOSECURITY = process.env.ROBLOSECURITY || "<your_roblosecurity_cookie_here>";
+const ROBLOSECURITY = process.env.ROBLOSECURITY
 
 if (!ROBLOSECURITY) {
   console.error("Error: No ROBLOSECURITY cookie found! Set it in your environment or in the script.");
