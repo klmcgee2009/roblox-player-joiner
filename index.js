@@ -3,56 +3,58 @@ const axios = require("axios");
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// BFS friend search
 app.get("/connections/:fromId/:toId", async (req, res) => {
   const { fromId, toId } = req.params;
-  
-  let searchedCount = 0;
   const visited = new Set();
-  const queue = [ [fromId] ];
-  const maxDepth = 6; // Adjust as needed
+  const queue = [[fromId]];
+  let searchedCount = 0;
+  const maxDepth = 7; // You can increase this, but higher depth = longer search time
 
-  while (queue.length) {
+  while (queue.length > 0) {
     const path = queue.shift();
-    const current = path[path.length - 1];
+    const currentId = path[path.length - 1];
 
-    if (visited.has(current)) continue;
-    visited.add(current);
+    if (visited.has(currentId)) continue;
+    visited.add(currentId);
     searchedCount++;
 
-    // Log every 10 players checked
-    if (searchedCount % 10 === 0) {
-      console.log(`Searched ${searchedCount} users so far...`);
-    }
-
-    // If depth limit reached, skip expanding this path
-    if (path.length > maxDepth) continue;
+    console.log(`Searching ${searchedCount}: ${currentId}`);
 
     try {
-      const resp = await axios.get(`https://friends.roblox.com/v1/users/${current}/friends`);
-      const friends = resp.data.data.map(u => u.id.toString());
+      const response = await axios.get(`https://friends.roblox.com/v1/users/${currentId}/friends`);
+      const friends = response.data.data.map(f => f.id.toString());
 
-      // If the target is among these friends, return the full path
       if (friends.includes(toId)) {
         const fullPath = [...path, toId];
-        console.log(`Found connection in ${searchedCount} searches.`);
-        return res.json({ searchedCount, path: fullPath });
+        return res.json({
+          searchedCount,
+          from: fromId,
+          to: toId,
+          path: fullPath
+        });
       }
 
-      // Add unvisited friends to the queue to expand BFS
-      for (const friendId of friends) {
-        if (!visited.has(friendId)) {
-          queue.push([...path, friendId]);
+      if (path.length < maxDepth) {
+        for (const friendId of friends) {
+          if (!visited.has(friendId)) {
+            queue.push([...path, friendId]);
+          }
         }
       }
 
-    } catch (e) {
-      console.warn(`Skipping user ${current}: ${e.message}`);
+    } catch (error) {
+      console.warn(`Error fetching friends of ${currentId}: ${error.message}`);
+      continue;
     }
   }
 
-  // No connection found within max depth
-  res.status(404).json({ error: "No connection found", searchedCount });
+  return res.status(404).json({
+    error: "No connection found",
+    searchedCount
+  });
 });
 
-// Start the server
-app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Roblox Connection Search API running on port ${PORT}`);
+});
