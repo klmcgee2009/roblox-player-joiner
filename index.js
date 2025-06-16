@@ -1,12 +1,25 @@
+require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
+
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-app.get("/", (req, res) => {
-  res.send("Roblox Connection Search API is running.");
+const ROBLOSECURITY = process.env.ROBLOSECURITY;
+if (!ROBLOSECURITY) {
+  console.error("🚨 Missing ROBLOSECURITY. Set it in your environment.");
+  process.exit(1);
+}
+
+const api = axios.create({
+  headers: {
+    Cookie: `.ROBLOSECURITY=${ROBLOSECURITY}`,
+    "User-Agent": "Roblox/WinInet"
+  },
+  timeout: 10000
 });
 
+// BFS for friend connections
 app.get("/connections/:fromId/:toId", async (req, res) => {
   const { fromId, toId } = req.params;
   const visited = new Set();
@@ -17,41 +30,36 @@ app.get("/connections/:fromId/:toId", async (req, res) => {
   while (queue.length) {
     const path = queue.shift();
     const currentId = path[path.length - 1];
-
     if (visited.has(currentId)) continue;
     visited.add(currentId);
     searchedCount++;
-    console.log(`🔍 Searched (${searchedCount}): ${path.join(" → ")}`);
+    console.log(`🔍 (#${searchedCount}) Current path: ${path.join(" → ")}`);
 
     try {
-      const response = await axios.get(`https://friends.roblox.com/v1/users/${currentId}/friends`);
-      const friends = response.data.data.map(friend => friend.id.toString());
-      console.log(`➡️ ${currentId} has ${friends.length} friends`);
+      const { data } = await api.get(`https://friends.roblox.com/v1/users/${currentId}/friends`);
+      const friends = data.data.map(f => f.id.toString());
+      console.log(`↳ ${currentId} → ${friends.length} friends`);
 
       if (friends.includes(toId)) {
-        const fullPath = [...path, toId];
-        console.log(`✅ Connection found: ${fullPath.join(" → ")}`);
-        return res.json({ searchedCount, connection: fullPath });
+        const connection = [...path, toId];
+        console.log(`✅ Found connection: ${connection.join(" → ")}`);
+        return res.json({ searchedCount, connection });
       }
 
       if (path.length < maxDepth) {
-        for (const friendId of friends) {
-          if (!visited.has(friendId)) {
-            queue.push([...path, friendId]);
-            console.log(`📥 Enqueue: ${[...path, friendId].join(" → ")}`);
-          }
+        for (const fid of friends) {
+          if (!visited.has(fid)) queue.push([...path, fid]);
         }
       }
-
     } catch (err) {
-      console.warn(`⚠️ Failed to fetch friends for ${currentId}: ${err.message}`);
+      console.warn(`⚠️ Error for ${currentId}: ${err.response?.status || err.message}`);
     }
   }
 
-  console.log(`❌ No connection found after ${searchedCount} searches.`);
-  res.status(404).json({ error: "No connection found", searchedCount });
+  return res.status(404).json({
+    error: "No connection found",
+    searchedCount
+  });
 });
 
-app.listen(PORT, () => {
-  console.log(`🌐 Roblox Player Connection API running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Roblox Connection API live on port ${PORT}`));
