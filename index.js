@@ -1,73 +1,115 @@
-const express = require('express');
-const axios = require('axios');
-const cors = require('cors');
+const express = require("express");
+const axios = require("axios");
 
 const app = express();
-app.use(cors());
+const PORT = 10000;
 
-const PORT = process.env.PORT || 10000;
+app.get("/search/:username", async (req, res) => {
+  const username = req.params.username;
+  let playersSearched = 0;
+  let foundServerId = null;
+  let nextCursor = null;
+  let placeId = null;
 
-app.get('/connections/:fromId/:toId', async (req, res) => {
-  const { fromId, toId } = req.params;
+  try {
+    // Step 1: Get user info by username
+    const userRes = await axios.get(
+      `https://api.roblox.com/users/get-by-username?username=${username}`
+    );
 
-  console.log(`Searching connections from ${fromId} to ${toId}`);
+    if (userRes.data && userRes.data.Id) {
+      const userId = userRes.data.Id;
 
-  let queue = [[fromId]];
-  let visited = new Set([fromId]);
-  let searchedCount = 0;
-  const maxDepth = 6;
+      // Step 2: Get the user's current placeId by checking their presence
+      // We'll try to get presence info (online/offline and place)
+      const presenceRes = await axios.post(
+        "https://presence.roblox.com/v1/presence/users",
+        { userIds: [userId] }
+      );
 
-  while (queue.length) {
-    let path = queue.shift();
-    let currentUserId = path[path.length - 1];
-    searchedCount++;
-
-    if (searchedCount % 10 === 0) {
-      console.log(`Searched ${searchedCount} players so far...`);
-    }
-
-    if (currentUserId === toId) {
-      console.log(`Found connection! Total players searched: ${searchedCount}`);
-      return res.json({
-        searchedCount,
-        from: fromId,
-        to: toId,
-        connectionChain: path,
-      });
-    }
-
-    if (path.length > maxDepth) {
-      continue; // Skip paths deeper than maxDepth
-    }
-
-    try {
-      // Roblox friends API
-      const response = await axios.get(`https://friends.roblox.com/v1/users/${currentUserId}/friends`);
-      const friends = response.data.data.map(f => f.id.toString());
-
-      for (const friendId of friends) {
-        if (!visited.has(friendId)) {
-          visited.add(friendId);
-          queue.push([...path, friendId]);
-        }
+      const presenceInfo = presenceRes.data.userPresences[0];
+      if (presenceInfo.userPresenceType === "Offline") {
+        // Player is offline, return immediately
+        return res.json({
+          searchedPlayers: playersSearched,
+          status: "Offline",
+          playerName: username,
+          playerId: userId,
+          message: "Player is offline, not in any game."
+        });
       }
-    } catch (err) {
-      // API error, skip this node but keep searching others
-      console.error(`Error fetching friends of user ${currentUserId}:`, err.message);
-      continue;
-    }
-  }
 
-  console.log(`No connection found after searching ${searchedCount} players.`);
-  res.json({
-    searchedCount,
-    from: fromId,
-    to: toId,
-    connectionChain: null,
-    message: 'Connection not found within max search depth.',
-  });
+      if (presenceInfo.lastLocation) {
+        placeId = presenceInfo.lastLocation.placeId;
+      }
+
+      if (!placeId) {
+        return res.json({
+          searchedPlayers: playersSearched,
+          status: "In game but place ID unknown",
+          playerName: username,
+          playerId: userId,
+          message: "Cannot determine the place the player is in."
+        });
+      }
+
+      // Step 3: Now we search all servers for that place
+      let url = `https://games.roblox.com/v1/games/${placeId}/servers/Public?sortOrder=Asc&limit=100`;
+
+      do {
+        const serversRes = await axios.get(url + (nextCursor ? `&cursor=${nextCursor}` : ""));
+
+        if (serversRes.data && serversRes.data.data) {
+          const servers = serversRes.data.data;
+
+          // Search every player in each server
+          for (const server of servers) {
+            for (const player of server.players) {
+              playersSearched++;
+
+              if (player.id === userId) {
+                foundServerId = server.id;
+                break;
+              }
+            }
+            if (foundServerId) break;
+          }
+
+          if (foundServerId) break;
+
+          nextCursor = serversRes.data.nextPageCursor || null;
+        } else {
+          break;
+        }
+      } while (nextCursor);
+
+      if (foundServerId) {
+        return res.json({
+          searchedPlayers: playersSearched,
+          status: "Player Found",
+          playerName: username,
+          playerId: userId,
+          serverId: foundServerId,
+          message: `Player found in server ${foundServerId}`
+        });
+      } else {
+        return res.json({
+          searchedPlayers: playersSearched,
+          status: "Player Not Found in any server",
+          playerName: username,
+          playerId: userId,
+          message: "Player not found in any active public server."
+        });
+      }
+    } else {
+      return res.status(404).json({ error: "Player not found" });
+    }
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 app.listen(PORT, () => {
-  console.log(`Roblox Player Connections API running on port ${PORT}`);
+  console.log(`Roblox Player Search API running on port ${PORT}`);
 });
