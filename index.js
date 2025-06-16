@@ -4,7 +4,6 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
-// Read ROBLOSECURITY cookie from environment variable
 const ROBLOSECURITY = process.env.ROBLOSECURITY;
 if (!ROBLOSECURITY) {
   console.error('Error: ROBLOSECURITY environment variable is not set.');
@@ -17,7 +16,6 @@ const HEADERS = {
   'Content-Type': 'application/json'
 };
 
-// Lookup userId by username
 async function getUserId(username) {
   const res = await axios.post(
     'https://users.roblox.com/v1/usernames/users',
@@ -27,7 +25,6 @@ async function getUserId(username) {
   return res.data.data[0]?.id || null;
 }
 
-// Get presence info for userId
 async function getPresence(userId) {
   const res = await axios.post(
     'https://presence.roblox.com/v1/presence/users',
@@ -37,7 +34,6 @@ async function getPresence(userId) {
   return res.data.userPresences[0] || null;
 }
 
-// Get all public servers for a universeId, with pagination
 async function getServers(universeId, cursor = null) {
   let url = `https://games.roblox.com/v1/games/${universeId}/servers/Public?limit=100&sortOrder=Asc`;
   if (cursor) url += `&cursor=${cursor}`;
@@ -46,7 +42,6 @@ async function getServers(universeId, cursor = null) {
   return res.data;
 }
 
-// Search all servers to find the userId playing inside
 async function findUserInServers(universeId, userId) {
   let cursor = null;
 
@@ -55,20 +50,17 @@ async function findUserInServers(universeId, userId) {
     cursor = data.nextPageCursor;
 
     for (const server of data.data) {
-      // Each server has a list of players in 'playing'
       for (const player of server.playing) {
         if (player.id === userId) {
-          // Found user in this server
           return {
             placeId: server.placeId,
-            gameId: server.id, // jobId
+            gameId: server.id,
           };
         }
       }
     }
   } while (cursor);
 
-  // Not found in any server
   return null;
 }
 
@@ -80,25 +72,21 @@ app.get('/find/:username', async (req, res) => {
 
     const presence = await getPresence(userId);
 
-    // If presence includes placeId and gameId (server), return that directly
     if (
       presence &&
       presence.lastLocation?.placeId &&
-      presence.gameId // this is server instance id (jobId)
+      presence.gameId
     ) {
       return res.json({
         userId,
         username,
-        userPresenceType: presence.userPresenceType,
         placeId: presence.lastLocation.placeId,
         universeId: presence.lastLocation.universeId,
         gameId: presence.gameId,
-        fullPresenceData: presence,
         method: 'direct-presence'
       });
     }
 
-    // If no direct server info, try searching all servers of universe to find user
     const universeId = presence?.lastLocation?.universeId;
     if (!universeId) {
       return res.status(404).json({ error: 'Universe ID not found or user offline' });
