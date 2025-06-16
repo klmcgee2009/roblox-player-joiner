@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Roblox Player Connection Finder</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; }
+  label, input, button { font-size: 1.1em; margin: 5px 0; }
+  #output { margin-top: 20px; white-space: pre-wrap; background: #f0f0f0; padding: 10px; border-radius: 5px; }
+</style>
+</head>
+<body>
+
+<h1>Roblox Player Connection Finder</h1>
+
+<label for="fromId">From Player ID:</label><br />
+<input type="text" id="fromId" placeholder="e.g. 7953169701" /><br />
+
+<label for="toId">To Player ID:</label><br />
+<input type="text" id="toId" placeholder="e.g. 151848836" /><br />
+
+<button id="searchBtn">Search Connections</button>
+
+<div id="output"></div>
+
+<script>
+  const output = document.getElementById('output');
+  const btn = document.getElementById('searchBtn');
+
+  btn.onclick = async () => {
+    const fromId = document.getElementById('fromId').value.trim();
+    const toId = document.getElementById('toId').value.trim();
+
+    if (!fromId || !toId) {
+      alert('Please enter both player IDs');
+      return;
+    }
+
+    output.textContent = 'Starting search...\n';
+
+    try {
+      const res = await fetch(`https://roblox-player-api.onrender.com/connections/${fromId}/${toId}`);
+      if (!res.ok) throw new Error('API request failed');
+
+      const data = await res.json();
+
+      output.textContent += `Searched players: ${data.searchedCount}\n`;
+      output.textContent += `From player ID: ${data.from}\n`;
+      output.textContent += `To player ID: ${data.to}\n\n`;
+
+      if (data.connectionChain) {
+        output.textContent += 'Connection chain found:\n';
+        data.connectionChain.forEach((id, i) => {
+          output.textContent += `${i + 1}. Player ID: ${id}\n`;
+        });
+      } else {
+        output.textContent += data.message || 'No connection found.';
+      }
+    } catch (err) {
+      output.textContent += 'Error: ' + err.message;
+    }
+  };
+</script>
+
+</body>
+</html>
