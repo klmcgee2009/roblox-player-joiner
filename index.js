@@ -1,79 +1,66 @@
-const express = require("express");
-const axios = require("axios");
-require("dotenv").config();
+require('dotenv').config();
+const express = require('express');
+const axios = require('axios');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const ROBLOSECURITY = process.env.ROBLOSECURITY;
+const PORT = process.env.PORT || 10000;
+const COOKIE = process.env.ROBLOSECURITY;
 
-const headers = {
-  Cookie: `.ROBLOSECURITY=${ROBLOSECURITY}`,
-  "User-Agent": "Roblox/WinInet",
-  "Content-Type": "application/json"
-};
+let totalSearches = 0; // Count how many players have been searched
 
-// Get user ID from username
-async function getUserId(username) {
-  const res = await axios.get(`https://users.roblox.com/v1/usernames/users`, {
-    data: { usernames: [username] },
-    headers
-  });
-  if (res.data.data.length === 0) return null;
-  return res.data.data[0].id;
-}
-
-// Get user presence (online/offline/in-game)
-async function getUserPresence(userId) {
-  const res = await axios.post(`https://presence.roblox.com/v1/presence/users`, {
-    userIds: [userId]
-  }, { headers });
-  return res.data.userPresences[0];
-}
-
-// Try to get the server or game info
-async function getGameInstanceData(universeId) {
-  try {
-    const res = await axios.get(`https://games.roblox.com/v1/games?universeIds=${universeId}`, {
-      headers
-    });
-    return res.data.data[0];
-  } catch (err) {
-    return null;
-  }
-}
-
-app.get("/search/:username", async (req, res) => {
+app.get('/search/:username', async (req, res) => {
   const username = req.params.username;
+  totalSearches++; // Increase the counter
+  console.log(`[SEARCH #${totalSearches}] Searching for user: ${username}`);
 
   try {
-    const userId = await getUserId(username);
-    if (!userId) return res.status(404).json({ error: "User not found" });
+    // Get userId from username
+    const userResponse = await axios.post(
+      `https://users.roblox.com/v1/usernames/users`,
+      { usernames: [username] },
+      { headers: { 'Content-Type': 'application/json' } }
+    );
 
-    const presence = await getUserPresence(userId);
-    const status = presence.userPresenceType;
-    let response = {
-      username,
-      userId,
-      status: status === 0 ? "Offline" : status === 1 ? "Online" : "In Game"
-    };
-
-    if (presence.userPresenceType === 2) { // In Game
-      response.placeId = presence.lastLocation;
-      response.game = presence.lastLocation;
-      response.universeId = presence.universeId;
-
-      const gameInfo = await getGameInstanceData(presence.universeId);
-      if (gameInfo) {
-        response.placeName = gameInfo.name;
-        response.joinScript = `roblox://placeId=${presence.placeId}&universeId=${presence.universeId}`;
-      }
+    const userData = userResponse.data.data[0];
+    if (!userData) {
+      return res.json({ error: 'User not found', searched: totalSearches });
     }
 
-    res.json(response);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: "Something went wrong." });
+    const userId = userData.id;
+
+    // Get presence (online status)
+    const presenceResponse = await axios.post(
+      `https://presence.roblox.com/v1/presence/users`,
+      { userIds: [userId] },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': `.ROBLOSECURITY=${COOKIE}`
+        }
+      }
+    );
+
+    const presenceInfo = presenceResponse.data.userPresences[0];
+    res.json({
+      searched: totalSearches,
+      username: userData.name,
+      userId: userData.id,
+      displayName: userData.displayName,
+      status: presenceInfo.userPresenceType === 2 ? 'In Game' :
+              presenceInfo.userPresenceType === 1 ? 'Online' : 'Offline',
+      lastLocation: presenceInfo.lastLocation,
+      placeId: presenceInfo.lastLocation?.placeId || null,
+      universeId: presenceInfo.universeId || null
+    });
+  } catch (error) {
+    console.error(`[ERROR] While searching for ${username}:`, error.message);
+    res.status(500).json({ error: 'Internal server error', searched: totalSearches });
   }
+});
+
+// Optional endpoint to show search count
+app.get('/stats', (req, res) => {
+  res.json({ totalSearches });
 });
 
 app.listen(PORT, () => {
