@@ -1,58 +1,58 @@
 const express = require("express");
 const axios = require("axios");
-
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 app.get("/connections/:fromId/:toId", async (req, res) => {
   const { fromId, toId } = req.params;
-
-  let searchedCount = 0;
-  let visited = new Set();
-  let queue = [[fromId]];
   
-  while (queue.length > 0) {
-    let path = queue.shift();
-    let lastId = path[path.length - 1];
+  let searchedCount = 0;
+  const visited = new Set();
+  const queue = [ [fromId] ];
+  const maxDepth = 6; // Adjust as needed
 
-    // Avoid rechecking
-    if (visited.has(lastId)) continue;
-    visited.add(lastId);
+  while (queue.length) {
+    const path = queue.shift();
+    const current = path[path.length - 1];
+
+    if (visited.has(current)) continue;
+    visited.add(current);
     searchedCount++;
 
-    // Get friends of this user
-    try {
-      const response = await axios.get(`https://friends.roblox.com/v1/users/${lastId}/friends`);
-      const friends = response.data.data.map(user => user.id.toString());
+    // Log every 10 players checked
+    if (searchedCount % 10 === 0) {
+      console.log(`Searched ${searchedCount} users so far...`);
+    }
 
-      // Check if target is among friends
+    // If depth limit reached, skip expanding this path
+    if (path.length > maxDepth) continue;
+
+    try {
+      const resp = await axios.get(`https://friends.roblox.com/v1/users/${current}/friends`);
+      const friends = resp.data.data.map(u => u.id.toString());
+
+      // If the target is among these friends, return the full path
       if (friends.includes(toId)) {
-        return res.json({
-          from: fromId,
-          to: toId,
-          connectionPath: [...path, toId],
-          searchedCount
-        });
+        const fullPath = [...path, toId];
+        console.log(`Found connection in ${searchedCount} searches.`);
+        return res.json({ searchedCount, path: fullPath });
       }
 
-      // Add unvisited friends to queue
+      // Add unvisited friends to the queue to expand BFS
       for (const friendId of friends) {
         if (!visited.has(friendId)) {
           queue.push([...path, friendId]);
         }
       }
 
-    } catch (err) {
-      console.log(`Error fetching friends for ${lastId}:`, err.message);
+    } catch (e) {
+      console.warn(`Skipping user ${current}: ${e.message}`);
     }
   }
 
-  return res.status(404).json({
-    error: "No connection found",
-    searchedCount
-  });
+  // No connection found within max depth
+  res.status(404).json({ error: "No connection found", searchedCount });
 });
 
-app.listen(PORT, () => {
-  console.log(`Roblox Friend Connection API running on port ${PORT}`);
-});
+// Start the server
+app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
