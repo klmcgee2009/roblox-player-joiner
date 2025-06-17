@@ -1,75 +1,62 @@
 const express = require('express');
 const axios = require('axios');
 const app = express();
+
+const proxies = [
+    "https://proxy1.onrender.com",
+    "https://proxy2.onrender.com",
+    "https://proxy3.onrender.com"
+    // add more as you deploy more proxies
+];
+
+let proxyIndex = 0;
+
+function getNextProxy() {
+    proxyIndex = (proxyIndex + 1) % proxies.length;
+    return proxies[proxyIndex];
+}
+
+async function proxyRequest(url, method = 'GET', data = null) {
+    const proxy = getNextProxy();
+    try {
+        const res = await axios.post(`${proxy}/forward`, {
+            url,
+            method,
+            headers: { "Cookie": `ROBLOSECURITY=${process.env.ROBLOSECURITY}` },
+            data
+        });
+        return res.data;
+    } catch (err) {
+        console.error(`Error via proxy ${proxy}:`, err.response?.data || err.message);
+        return null;
+    }
+}
+
+async function scanFriends(userId, visited = new Set()) {
+    if (visited.has(userId)) return;
+    visited.add(userId);
+    console.log(`🔎 Scanning userId ${userId} | Players scanned: ${visited.size}`);
+
+    const url = `https://friends.roblox.com/v1/users/${userId}/friends`;
+    const data = await proxyRequest(url);
+
+    if (data?.data) {
+        for (const friend of data.data) {
+            await scanFriends(friend.id, visited);
+        }
+    }
+}
+
 app.use(express.json());
 
-const PORT = process.env.PORT || 10000;
-
-const ROBLOX_API = 'https://friends.roblox.com/v1/users/';
-const scannedUsers = new Set();
-let totalScanned = 0;
-
-// Helper to pause execution
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Fetch friends with rate limit handling
-async function fetchFriends(userId, retry = 0) {
-    try {
-        const res = await axios.get(`${ROBLOX_API}${userId}/friends`);
-        return res.data.data || [];
-    } catch (err) {
-        if (err.response?.status === 429) {
-            const wait = Math.min(3000 * (retry + 1), 15000);
-            console.warn(`⚠️ Rate limited for userId ${userId}. Waiting ${wait / 1000}s before retrying...`);
-            await sleep(wait);
-            return fetchFriends(userId, retry + 1);
-        } else {
-            console.error(`❌ Error fetching friends for userId ${userId}:`, err.response?.status || err.message);
-            return [];
-        }
-    }
-}
-
-// Breadth-First Search to explore all friend connections
-async function searchUser(targetId, onScanUpdate) {
-    const queue = [targetId];
-    scannedUsers.add(targetId);
-    totalScanned++;
-
-    while (queue.length > 0) {
-        const currentId = queue.shift();
-        onScanUpdate(totalScanned);
-
-        const friends = await fetchFriends(currentId);
-
-        for (const friend of friends) {
-            if (!scannedUsers.has(friend.id)) {
-                scannedUsers.add(friend.id);
-                queue.push(friend.id);
-                totalScanned++;
-            }
-        }
-    }
-
-    return Array.from(scannedUsers);
-}
-
-// API route
-app.get('/search/:userId', async (req, res) => {
-    scannedUsers.clear();
-    totalScanned = 0;
-
-    const userId = req.params.userId;
-    console.log(`🔍 Starting scan from userId ${userId}`);
-
-    await searchUser(userId, (count) => {
-        console.log(`🔄 Players scanned: ${count}`);
-    });
-
-    res.json({ scannedCount: totalScanned, users: Array.from(scannedUsers) });
+app.post('/start-scan', async (req, res) => {
+    const { userId } = req.body;
+    console.log("🔍 Starting full scan...");
+    await scanFriends(userId);
+    res.send("✅ Scan complete");
 });
 
-// Start server
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-    console.log(`🚀 Roblox Connection API live on port ${PORT}`);
+    console.log(`🚀 Scanner live on port ${PORT}`);
 });
