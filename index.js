@@ -1,65 +1,45 @@
-import { getUserIdFromUsername, getConnections } from "./utils.js";
+const express = require("express");
+const cors = require("cors");
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-async function areUsersConnected(startUserId, targetUserId) {
-  const queue = [startUserId];
-  const visited = new Set();
-  let playersScanned = 0;
+// Dummy game list with categories (replace with real data)
+const games = [
+  { id: 1, name: "Adopt Me", category: "Popular" },
+  { id: 2, name: "Brookhaven", category: "Popular" },
+  { id: 3, name: "Tower of Hell", category: "Obby" },
+  { id: 4, name: "Blox Fruits", category: "Adventure" },
+];
 
-  while (queue.length > 0) {
-    const currentUserId = queue.shift();
+// Get games by category
+app.get("/games", (req, res) => {
+  const category = req.query.category?.toLowerCase() || "";
+  const filteredGames = games.filter(g =>
+    g.category.toLowerCase().includes(category)
+  );
+  res.json(filteredGames);
+});
 
-    if (currentUserId === targetUserId) {
-      console.log(`Connected! Found user ${targetUserId} after scanning ${playersScanned} users.`);
-      return true;
-    }
-
-    if (visited.has(currentUserId)) continue;
-    visited.add(currentUserId);
-
-    playersScanned++;
-    if (playersScanned % 50 === 0) {
-      console.log(`Players scanned: ${playersScanned}`);
-    }
-
-    try {
-      const connections = await getConnections(currentUserId);
-      for (const userId of connections) {
-        if (!visited.has(userId)) {
-          queue.push(userId);
-        }
-      }
-    } catch (err) {
-      console.error(`Error fetching connections for ${currentUserId}:`, err.message);
-      // optionally wait or skip depending on rate limit error
-    }
+// Search for player in a game universe (dummy simulation)
+app.post("/search-player", (req, res) => {
+  const { universeId, username } = req.body;
+  // Simulate search result
+  const found = Math.random() < 0.5; // 50% chance
+  if (found) {
+    res.json({
+      found: true,
+      universeId,
+      username,
+      serverId: "1234567890",
+      etaSeconds: 10,
+    });
+  } else {
+    res.json({ found: false });
   }
+});
 
-  console.log(`No connection found after scanning ${playersScanned} users.`);
-  return false;
-}
-
-async function main() {
-  try {
-    const startUsername = process.argv[2];
-    const targetUsername = process.argv[3];
-
-    if (!startUsername || !targetUsername) {
-      console.log("Usage: node index.js <startUsername> <targetUsername>");
-      process.exit(1);
-    }
-
-    console.log(`Resolving user IDs for ${startUsername} and ${targetUsername}...`);
-
-    const startUserId = await getUserIdFromUsername(startUsername);
-    const targetUserId = await getUserIdFromUsername(targetUsername);
-
-    console.log(`Start userId: ${startUserId}, Target userId: ${targetUserId}`);
-
-    const connected = await areUsersConnected(startUserId, targetUserId);
-    console.log(connected ? "Users ARE connected." : "Users are NOT connected.");
-  } catch (err) {
-    console.error("Error:", err);
-  }
-}
-
-main();
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`API listening on port ${PORT}`);
+});
