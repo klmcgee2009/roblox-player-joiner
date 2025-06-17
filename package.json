@@ -1,12 +1,13 @@
 {
-  "name": "roblox-connection-scanner",
+  "name": "roblox-connection-checker",
   "version": "1.0.0",
-  "description": "Scan Roblox friendship connections using Roblox-player-api",
+  "description": "Check if two Roblox users are connected by mutual connections.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "axios": "^1.4.0"
-  }
+    "node-fetch": "^3.3.1"
+  },
+  "type": "module"
 }
