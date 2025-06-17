@@ -1,70 +1,65 @@
-const axios = require('axios');
+import { getUserIdFromUsername, getConnections } from "./utils.js";
 
-const API_BASE = 'https://roblox-player-api.onrender.com';
-
-const RATE_LIMIT_WAIT = 3000; // 3 seconds wait if rate limited
-
-async function getFriends(userId) {
-  try {
-    const res = await axios.get(`${API_BASE}/user/${userId}/friends`);
-    return res.data;
-  } catch (error) {
-    if (error.response && error.response.status === 429) {
-      console.warn(`Rate limited on user ${userId}, waiting ${RATE_LIMIT_WAIT}ms...`);
-      await new Promise(res => setTimeout(res, RATE_LIMIT_WAIT));
-      return getFriends(userId); // retry after wait
-    }
-    console.error(`Error fetching friends for user ${userId}: ${error.message}`);
-    return [];
-  }
-}
-
-async function findConnection(startUserId, targetUserId, maxDepth = 5) {
+async function areUsersConnected(startUserId, targetUserId) {
+  const queue = [startUserId];
   const visited = new Set();
-  const queue = [{ userId: startUserId, depth: 0 }];
-  visited.add(startUserId);
-
-  console.log(`🔍 Starting scan from userId ${startUserId}`);
   let playersScanned = 0;
 
   while (queue.length > 0) {
-    const { userId, depth } = queue.shift();
-    playersScanned++;
-    if (playersScanned % 100 === 0) {
-      console.log(`🔄 Players scanned: ${playersScanned}`);
-    }
+    const currentUserId = queue.shift();
 
-    if (userId === targetUserId) {
-      console.log(`✅ Found connection to user ${targetUserId} at depth ${depth}`);
+    if (currentUserId === targetUserId) {
+      console.log(`Connected! Found user ${targetUserId} after scanning ${playersScanned} users.`);
       return true;
     }
 
-    if (depth >= maxDepth) continue;
+    if (visited.has(currentUserId)) continue;
+    visited.add(currentUserId);
 
-    const friends = await getFriends(userId);
-    for (const friend of friends) {
-      const friendId = friend.id || friend.userId || friend.UserId;
-      if (!visited.has(friendId)) {
-        visited.add(friendId);
-        queue.push({ userId: friendId, depth: depth + 1 });
+    playersScanned++;
+    if (playersScanned % 50 === 0) {
+      console.log(`Players scanned: ${playersScanned}`);
+    }
+
+    try {
+      const connections = await getConnections(currentUserId);
+      for (const userId of connections) {
+        if (!visited.has(userId)) {
+          queue.push(userId);
+        }
       }
+    } catch (err) {
+      console.error(`Error fetching connections for ${currentUserId}:`, err.message);
+      // optionally wait or skip depending on rate limit error
     }
   }
 
-  console.log(`❌ No connection found to user ${targetUserId} within depth ${maxDepth}`);
+  console.log(`No connection found after scanning ${playersScanned} users.`);
   return false;
 }
 
-// Example usage:
-// Replace these IDs with whatever start and target users you want to test
-const startUser = 681198824;
-const targetUser = 123456789;
+async function main() {
+  try {
+    const startUsername = process.argv[2];
+    const targetUsername = process.argv[3];
 
-(async () => {
-  const connected = await findConnection(startUser, targetUser, 4);
-  if (connected) {
-    console.log('🎉 Users are connected!');
-  } else {
-    console.log('😞 Users are not connected.');
+    if (!startUsername || !targetUsername) {
+      console.log("Usage: node index.js <startUsername> <targetUsername>");
+      process.exit(1);
+    }
+
+    console.log(`Resolving user IDs for ${startUsername} and ${targetUsername}...`);
+
+    const startUserId = await getUserIdFromUsername(startUsername);
+    const targetUserId = await getUserIdFromUsername(targetUsername);
+
+    console.log(`Start userId: ${startUserId}, Target userId: ${targetUserId}`);
+
+    const connected = await areUsersConnected(startUserId, targetUserId);
+    console.log(connected ? "Users ARE connected." : "Users are NOT connected.");
+  } catch (err) {
+    console.error("Error:", err);
   }
-})();
+}
+
+main();
