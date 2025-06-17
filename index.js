@@ -1,66 +1,75 @@
+const express = require('express');
 const axios = require('axios');
+const app = express();
+app.use(express.json());
 
-// Delay helper function
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+const PORT = process.env.PORT || 10000;
 
-// Counter for total searched players
-let searchedCount = 0;
+const ROBLOX_API = 'https://friends.roblox.com/v1/users/';
+const scannedUsers = new Set();
+let totalScanned = 0;
 
-// Fetch friends of a userId with retry on 429
-async function fetchUserFriends(userId) {
-  try {
-    const url = `https://friends.roblox.com/v1/users/${userId}/friends`;
-    const response = await axios.get(url);
+// Helper to pause execution
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    searchedCount++;
-    console.log(`🔍 (#${searchedCount}) Searched userId: ${userId} → Found ${response.data.data.length} friends`);
-
-    return response.data.data.map(friend => friend.id);
-  } catch (error) {
-    if (error.response && error.response.status === 429) {
-      console.warn(`⚠️ Rate limited for userId ${userId}. Waiting 3 seconds before retrying...`);
-      await delay(3000);
-      return fetchUserFriends(userId); // retry
-    } else {
-      console.error(`❌ Error fetching userId ${userId}: ${error.message || error}`);
-      return []; // return empty array on error so crawler continues
+// Fetch friends with rate limit handling
+async function fetchFriends(userId, retry = 0) {
+    try {
+        const res = await axios.get(`${ROBLOX_API}${userId}/friends`);
+        return res.data.data || [];
+    } catch (err) {
+        if (err.response?.status === 429) {
+            const wait = Math.min(3000 * (retry + 1), 15000);
+            console.warn(`⚠️ Rate limited for userId ${userId}. Waiting ${wait / 1000}s before retrying...`);
+            await sleep(wait);
+            return fetchFriends(userId, retry + 1);
+        } else {
+            console.error(`❌ Error fetching friends for userId ${userId}:`, err.response?.status || err.message);
+            return [];
+        }
     }
-  }
 }
 
-// Main crawl function with BFS-like approach and depth limit
-async function crawl(startUserId, maxDepth = 2) {
-  let queue = [startUserId];
-  let visited = new Set();
-  let depth = 0;
+// Breadth-First Search to explore all friend connections
+async function searchUser(targetId, onScanUpdate) {
+    const queue = [targetId];
+    scannedUsers.add(targetId);
+    totalScanned++;
 
-  while (queue.length > 0 && depth < maxDepth) {
-    let nextQueue = [];
+    while (queue.length > 0) {
+        const currentId = queue.shift();
+        onScanUpdate(totalScanned);
 
-    for (const userId of queue) {
-      if (visited.has(userId)) continue;
-      visited.add(userId);
+        const friends = await fetchFriends(currentId);
 
-      const friends = await fetchUserFriends(userId);
-
-      // Add friends for next level of crawl
-      nextQueue.push(...friends);
-
-      // Wait 1 second between requests to avoid hitting rate limits
-      await delay(1000);
+        for (const friend of friends) {
+            if (!scannedUsers.has(friend.id)) {
+                scannedUsers.add(friend.id);
+                queue.push(friend.id);
+                totalScanned++;
+            }
+        }
     }
 
-    queue = nextQueue;
-    depth++;
-  }
-
-  console.log(`✅ Crawling finished. Total searched players: ${searchedCount}`);
+    return Array.from(scannedUsers);
 }
 
-// Replace this with the user ID you want to start searching from
-const startingUserId = '681198824';
+// API route
+app.get('/search/:userId', async (req, res) => {
+    scannedUsers.clear();
+    totalScanned = 0;
 
-// Start the crawler
-crawl(startingUserId).catch(err => console.error("Crawler failed:", err));
+    const userId = req.params.userId;
+    console.log(`🔍 Starting scan from userId ${userId}`);
+
+    await searchUser(userId, (count) => {
+        console.log(`🔄 Players scanned: ${count}`);
+    });
+
+    res.json({ scannedCount: totalScanned, users: Array.from(scannedUsers) });
+});
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`🚀 Roblox Connection API live on port ${PORT}`);
+});
