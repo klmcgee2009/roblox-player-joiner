@@ -1,5 +1,3 @@
-// server.js
-
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
@@ -22,7 +20,6 @@ const robloxApi = axios.create({
     }
 });
 
-// Web service endpoint
 app.post('/findPlayer', async (req, res) => {
     const { universeId, userId } = req.body;
 
@@ -31,7 +28,6 @@ app.post('/findPlayer', async (req, res) => {
     }
 
     try {
-        // Get all places for the universe
         const universeInfo = await robloxApi.get(`https://develop.roblox.com/v1/universes/${universeId}/places`);
         const places = universeInfo.data.data;
 
@@ -39,7 +35,6 @@ app.post('/findPlayer', async (req, res) => {
             return res.status(404).json({ error: 'No places found for this Universe ID.' });
         }
 
-        // Search all places (usually one, but just in case)
         for (const place of places) {
             const placeId = place.id;
             let cursor = null;
@@ -53,7 +48,6 @@ app.post('/findPlayer', async (req, res) => {
                     const playerIds = server.playerIds || [];
 
                     if (playerIds.includes(parseInt(userId))) {
-                        // Found the player in this server
                         return res.json({
                             found: true,
                             placeId: placeId,
