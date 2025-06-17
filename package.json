@@ -1,13 +1,12 @@
 {
-  "name": "roblox-connection-checker",
+  "name": "roblox-api",
   "version": "1.0.0",
-  "description": "Check if two Roblox users are connected by mutual connections.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "node-fetch": "^3.3.1"
-  },
-  "type": "module"
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
 }
