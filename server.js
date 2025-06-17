@@ -1,94 +1,45 @@
-require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Your Roblox cookie goes here
+const ROBLOSECURITY =  process.env.ROBLOSECURITY;
+
+// Middleware to parse JSON bodies (for POST if needed)
 app.use(express.json());
 
-const ROBLOSECURITY = process.env.ROBLOSECURITY;
-
-if (!ROBLOSECURITY) {
-  console.error("ERROR: ROBLOSECURITY token is missing in your environment variables.");
-  process.exit(1);
-}
-
-const robloxApi = axios.create({
-  headers: {
-    'Cookie': `.ROBLOSECURITY=${ROBLOSECURITY}`,
-    'User-Agent': 'RobloxServerFinder/1.0'
-  },
-  timeout: 10000
-});
-
-app.post('/findPlayer', async (req, res) => {
-  const { universeId, userId } = req.body;
-
-  if (!universeId || !userId) {
-    return res.status(400).json({ error: 'Missing universeId or userId in request body.' });
-  }
+// Example GET endpoint with URL params
+app.get('/findPlayer/:universeId/:userId', async (req, res) => {
+  const { universeId, userId } = req.params;
 
   try {
-    // Get places for universe
-    const universeResp = await robloxApi.get(`https://develop.roblox.com/v1/universes/${universeId}/places`);
-    if (!universeResp.data || !universeResp.data.data) {
-      return res.status(404).json({ error: 'No places found for this universe.' });
-    }
+    // Your searching logic here, example:
+    // 1. Get list of active servers for universeId
+    const serversResponse = await axios.get(`https://games.roblox.com/v1/games/${universeId}/servers/Public?limit=100`, {
+      headers: { Cookie: `.ROBLOSECURITY=${ROBLOSECURITY}` }
+    });
 
-    const places = universeResp.data.data;
-    if (places.length === 0) {
-      return res.status(404).json({ error: 'Universe has no places.' });
-    }
+    const servers = serversResponse.data.data;
 
-    // Search each place’s public servers
-    for (const place of places) {
-      const placeId = place.id;
-      let cursor = null;
-
-      while (true) {
-        try {
-          const url = `https://games.roblox.com/v1/games/${placeId}/servers/Public?limit=100${cursor ? `&cursor=${cursor}` : ''}`;
-          const serversResp = await robloxApi.get(url);
-
-          const servers = serversResp.data.data || [];
-          for (const server of servers) {
-            // Roblox API returns list of userIds currently in server as server.playing
-            // But Roblox API often does NOT provide the player list here.
-            // So, unfortunately, you can’t check which players are in the server via this API endpoint.
-            // This is a Roblox limitation.
-
-            // So here we can only return server info, NOT player presence.
-
-            // As a workaround, you can return the list of active servers for the place.
-
-            // **So to answer your original need: Roblox does not publicly provide a player list per server.**
-
-          }
-
-          // Pagination
-          if (!serversResp.data.nextPageCursor) break;
-          cursor = serversResp.data.nextPageCursor;
-
-        } catch (innerErr) {
-          // If 404 or other errors, break or continue
-          break;
-        }
+    // 2. Search for userId in server player lists
+    for (const server of servers) {
+      const players = server.players || [];
+      if (players.find(p => p.id.toString() === userId)) {
+        return res.json({
+          found: true,
+          serverId: server.id,
+          joinLink: `https://www.roblox.com/games/start?placeId=${universeId}&gameInstanceId=${server.id}`
+        });
       }
     }
 
-    // Since Roblox API doesn’t expose player lists, you cannot find a player’s server via API.
-    return res.json({
-      found: false,
-      message: "Roblox API does not expose player presence in game servers publicly. Cannot find player's server ID."
-    });
+    // Not found
+    res.json({ found: false, message: 'Player not found in active servers' });
 
-  } catch (err) {
-    if (err.response && err.response.status === 404) {
-      return res.status(404).json({ error: 'Universe or place not found.' });
-    }
-    console.error(err);
-    return res.status(500).json({ error: 'Internal server error.', details: err.toString() });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to search servers' });
   }
 });
 
