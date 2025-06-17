@@ -1,12 +1,10 @@
-{
-  "name": "roblox-api",
-  "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
+[
+  {
+    "placeId": 1234567890,
+    "name": "Example Game Title"
   },
-  "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5"
+  {
+    "placeId": 987654321,
+    "name": "Another Game"
   }
-}
+]
