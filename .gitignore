@@ -1,1 +1,17 @@
+# Node modules folder
 node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables file (if you use one)
+.env
+
+# OS files
+.DS_Store
+
+# Optional: lock files if you don't want to track
+package-lock.json
+yarn.lock
