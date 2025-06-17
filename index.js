@@ -1,89 +1,85 @@
 const express = require("express");
+const axios = require("axios");
 const cors = require("cors");
-const { v4: uuidv4 } = require("uuid");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 app.use(cors());
 app.use(express.json());
 
-// --- Mock database of games
-const gamesDB = [
-  { id: "1", name: "Adopt Me", placeId: 920587237, universeId: 920587237 },
-  { id: "2", name: "Bloxburg", placeId: 185655149, universeId: 185655149 },
-  { id: "3", name: "Tower of Hell", placeId: 1962086868, universeId: 1962086868 },
-  { id: "4", name: "Jailbreak", placeId: 606849621, universeId: 606849621 },
-];
+// Helper to get games matching query from Roblox API
+async function searchGames(query) {
+  try {
+    const res = await axios.get(
+      `https://games.roblox.com/v1/games/list?keyword=${encodeURIComponent(query)}&limit=10`
+    );
+    return res.data.data; // Array of games
+  } catch (error) {
+    console.error("Error fetching games:", error.message);
+    return [];
+  }
+}
 
-// --- Simulated search jobs stored here
-const searchJobs = {};
+// Helper to get servers for a universeId
+async function getServers(universeId, cursor = "") {
+  try {
+    let url = `https://games.roblox.com/v1/games/${universeId}/servers/Public?sortOrder=Asc&limit=100`;
+    if (cursor) url += `&cursor=${cursor}`;
+    const res = await axios.get(url);
+    return res.data; // Contains data array + nextPageCursor
+  } catch (error) {
+    console.error("Error fetching servers:", error.message);
+    return null;
+  }
+}
 
-// --- GET /games/search?query=xxx
-app.get("/games/search", (req, res) => {
-  const query = (req.query.query || "").toLowerCase();
-  if (!query) return res.json({ games: [] });
+// Endpoint: Search for games by name keyword
+app.get("/games/search", async (req, res) => {
+  const query = req.query.query;
+  if (!query) return res.status(400).json({ error: "Missing query parameter" });
 
-  // Return games where name includes query (case-insensitive)
-  const results = gamesDB.filter((g) => g.name.toLowerCase().includes(query));
-  res.json({ games: results });
+  const games = await searchGames(query);
+  res.json({ games });
 });
 
-// --- POST /search/start { username, gameId }
-app.post("/search/start", (req, res) => {
-  const { username, gameId } = req.body;
-  if (!username || !gameId) {
-    return res.status(400).json({ error: "Missing username or gameId" });
+// Endpoint: Check if a user is online in any server of a given universeId
+app.get("/player/search", async (req, res) => {
+  const { universeId, username } = req.query;
+  if (!universeId || !username) {
+    return res.status(400).json({ error: "Missing universeId or username parameter" });
   }
 
-  // Create a new job
-  const jobId = uuidv4();
+  let cursor = "";
+  let found = false;
+  let serverId = null;
 
-  // Simulate job state
-  searchJobs[jobId] = {
-    username,
-    gameId,
-    found: false,
-    placeId: null,
-    serverId: null,
-    eta: 10, // seconds estimated time
-    timeStarted: Date.now(),
-  };
+  while (!found) {
+    const serversData = await getServers(universeId, cursor);
+    if (!serversData) break; // error fetching servers
 
-  // Simulate "finding" player after 10 seconds
-  setTimeout(() => {
-    searchJobs[jobId].found = true;
-    searchJobs[jobId].placeId = gamesDB.find(g => g.id === gameId).placeId;
-    searchJobs[jobId].serverId = "server_" + Math.floor(Math.random() * 100000);
-    searchJobs[jobId].eta = 0;
-  }, 10000);
+    for (const server of serversData.data) {
+      // server.players is an array of player objects
+      const players = server.players || [];
+      if (players.find(p => p.userName.toLowerCase() === username.toLowerCase())) {
+        found = true;
+        serverId = server.id;
+        break;
+      }
+    }
 
-  res.json({ jobId });
-});
-
-// --- GET /search/status?jobId=xxx
-app.get("/search/status", (req, res) => {
-  const jobId = req.query.jobId;
-  if (!jobId || !searchJobs[jobId]) {
-    return res.status(404).json({ error: "Job not found" });
+    if (found) break;
+    if (!serversData.nextPageCursor) break; // no more servers
+    cursor = serversData.nextPageCursor;
   }
 
-  const job = searchJobs[jobId];
-
-  // Update ETA dynamically
-  if (!job.found) {
-    const elapsed = (Date.now() - job.timeStarted) / 1000;
-    job.eta = Math.max(10 - elapsed, 0);
+  if (found) {
+    res.json({ status: "online", serverId });
+  } else {
+    res.json({ status: "offline" });
   }
-
-  res.json({
-    found: job.found,
-    placeId: job.placeId,
-    serverId: job.serverId,
-    eta: Math.round(job.eta),
-  });
 });
 
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`🚀 Roblox Connection API live on port ${PORT}`);
 });
