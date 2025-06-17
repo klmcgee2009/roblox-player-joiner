@@ -1,10 +1,16 @@
-[
-  {
-    "placeId": 1234567890,
-    "name": "Example Game Title"
+{
+  "name": "roblox-connection-api",
+  "version": "1.0.0",
+  "description": "API to search Roblox games and find players online",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
   },
-  {
-    "placeId": 987654321,
-    "name": "Another Game"
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.4.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
   }
-]
+}
