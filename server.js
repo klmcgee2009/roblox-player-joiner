@@ -5,6 +5,8 @@ const app = express();
 
 app.use(cors());
 
+const assetTypeIds = [8, 9, 11, 12, 19, 21]; // Hats, Faces, Shirts, Pants, Gear, T-Shirts
+
 app.get('/getInventory', async (req, res) => {
   const username = req.query.username;
   if (!username) return res.status(400).json({ error: 'Username required' });
@@ -22,22 +24,52 @@ app.get('/getInventory', async (req, res) => {
 
     const userId = userResponse.data.data[0].id;
 
-    // Get inventory of hats (assetTypeId 8)
-    const inventoryResponse = await axios.get(`https://inventory.roblox.com/v2/users/${userId}/inventory/8?limit=20`);
+    let allItems = [];
 
-    // Map items to get thumbnails and names
-    const items = await Promise.all(inventoryResponse.data.data.map(async (item) => {
-      // Get thumbnail for the asset
-      const thumbResponse = await axios.get(`https://thumbnails.roblox.com/v1/assets?assetIds=${item.assetId}&size=150x150&format=Png&isCircular=false`);
-      const thumbnailUrl = thumbResponse.data.data[0].imageUrl;
+    // Helper to get inventory per assetTypeId
+    async function getInventoryByType(typeId) {
+      let items = [];
+      let cursor = "";
+      let hasMore = true;
 
-      return {
-        name: item.name,
-        thumbnail: thumbnailUrl
-      };
-    }));
+      while (hasMore) {
+        const url = `https://inventory.roblox.com/v2/users/${userId}/inventory/${typeId}?limit=100${cursor ? `&cursor=${cursor}` : ''}`;
+        const invRes = await axios.get(url);
+        items = items.concat(invRes.data.data);
+        hasMore = invRes.data.nextPageCursor !== null;
+        cursor = invRes.data.nextPageCursor;
+      }
 
-    res.json({ items });
+      return items;
+    }
+
+    // Get inventory for all types
+    for (const typeId of assetTypeIds) {
+      const items = await getInventoryByType(typeId);
+      allItems = allItems.concat(items);
+    }
+
+    // Get thumbnails for all items (in parallel, but limited to avoid flooding)
+    const thumbPromises = allItems.map(async (item) => {
+      try {
+        const thumbRes = await axios.get(`https://thumbnails.roblox.com/v1/assets?assetIds=${item.assetId}&size=150x150&format=Png&isCircular=false`);
+        return {
+          name: item.name,
+          thumbnail: thumbRes.data.data[0]?.imageUrl || "",
+          assetTypeId: item.assetTypeId
+        };
+      } catch {
+        return {
+          name: item.name,
+          thumbnail: "",
+          assetTypeId: item.assetTypeId
+        };
+      }
+    });
+
+    const itemsWithThumbnails = await Promise.all(thumbPromises);
+
+    res.json({ items: itemsWithThumbnails });
 
   } catch (error) {
     console.error(error.message);
