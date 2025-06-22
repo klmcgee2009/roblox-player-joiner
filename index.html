@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Roblox Friend Connection Finder</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; }
+  label { display: block; margin-top: 15px; }
+  input { width: 100%; padding: 8px; font-size: 1em; }
+  button { margin-top: 20px; padding: 10px 15px; font-size: 1em; cursor: pointer; }
+  pre { background: #eee; padding: 15px; white-space: pre-wrap; }
+  #result { margin-top: 30px; }
+</style>
+</head>
+<body>
+<h1>Roblox Friend Connection Finder</h1>
+
+<label for="startUserId">Start User ID:</label>
+<input type="number" id="startUserId" placeholder="Enter start user ID" />
+
+<label for="targetUserId">Target User ID:</label>
+<input type="number" id="targetUserId" placeholder="Enter target user ID" />
+
+<button id="searchBtn">Find Connection</button>
+
+<div id="result"></div>
+
+<script>
+  const searchBtn = document.getElementById('searchBtn');
+  const resultDiv = document.getElementById('result');
+
+  searchBtn.onclick = async () => {
+    const startUserId = document.getElementById('startUserId').value.trim();
+    const targetUserId = document.getElementById('targetUserId').value.trim();
+
+    if (!startUserId || !targetUserId) {
+      alert("Please enter both Start User ID and Target User ID.");
+      return;
+    }
+
+    resultDiv.textContent = "Searching... Please wait.";
+
+    try {
+      const response = await fetch('https://your-app-name.onrender.com/findConnection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startUserId, targetUserId })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        resultDiv.textContent = "Error: " + (errorData.message || errorData.error || "Unknown error");
+        return;
+      }
+
+      const data = await response.json();
+      resultDiv.innerHTML = `<h2>Connection Found!</h2>
+        <pre>${JSON.stringify(data, null, 2)}</pre>`;
+    } catch (err) {
+      resultDiv.textContent = "Network error or server unreachable.";
+    }
+  };
+</script>
+
+</body>
+</html>
