@@ -1,37 +1,47 @@
-document.getElementById('joinBtn').addEventListener('click', async () => {
-  const username = document.getElementById('username').value.trim();
-  const status = document.getElementById('status');
+const joinBtn = document.getElementById('joinBtn');
+const usernameInput = document.getElementById('username');
+const status = document.getElementById('status');
 
+// Change this to your deployed backend URL
+const API_BASE = 'https://your-api-url.onrender.com';
+
+joinBtn.addEventListener('click', async () => {
+  const username = usernameInput.value.trim();
   if (!username) {
-    status.textContent = '❗ Enter a username.';
+    status.textContent = '❗ Enter a username';
     return;
   }
 
-  status.textContent = '🔎 Searching...';
+  status.textContent = '🔎 Joining...';
 
   try {
-    const res = await fetch(`https://roblox-player-joiner.onrender.com/getServer?username=${encodeURIComponent(username)}`);
-    const data = await res.json();
+    // Call backend to make alt join the target user's server
+    const joinRes = await fetch(`${API_BASE}/joinServer?username=${encodeURIComponent(username)}`);
+    const joinData = await joinRes.json();
 
-    if (data.joinLink) {
-      status.textContent = '✅ Found! Launching Roblox...';
+    if (joinData.success) {
+      status.textContent = '✅ Alt joined server! Fetching join link...';
 
-      // STEP 1: Open the Roblox game page in a new tab
-      window.open(data.joinLink, '_blank');
+      // Get alt's current server info
+      const altRes = await fetch(`${API_BASE}/getAltServer`);
+      const altData = await altRes.json();
 
-      // STEP 2: Launch the server directly using protocol
-      const [placeId, jobId] = data.joinLink.split('/games/')[1].split('?jobId=');
-      const protocolUrl = `roblox-player://game/${placeId}/0/${jobId}`;
+      if (altData.placeId && altData.jobId) {
+        const robloxJoinLink = `roblox-player://game/${altData.placeId}/0/${altData.jobId}`;
 
-      setTimeout(() => {
-        window.location.href = protocolUrl;
-      }, 1200); // delay to let the game page open
+        status.innerHTML = `✅ Ready to join! <br>
+          <a href="${robloxJoinLink}" id="openRoblox" target="_blank">Click here to open Roblox and join</a>`;
 
+        // Optional: Auto open the roblox protocol (may be blocked by browser)
+        // window.location.href = robloxJoinLink;
+      } else {
+        status.textContent = '⚠️ Could not get alt server info';
+      }
     } else {
-      status.textContent = data.error || '⚠️ Could not find server.';
+      status.textContent = joinData.error || '❌ Failed to join server';
     }
   } catch (err) {
-    console.error('[API ERROR]', err);
-    status.textContent = `❌ Error: ${err.message || 'API connection failed'}`;
+    status.textContent = '❌ API error';
+    console.error(err);
   }
 });
