@@ -9,22 +9,16 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 
 const COOKIE = process.env.ROBLOSECURITY;
-const API_KEY = process.env.API_KEY;
 
 app.get('/getServer', async (req, res) => {
-  const { username, key } = req.query;
-
-  // ✅ Check API key
-  if (!key || key !== API_KEY) {
-    return res.status(403).json({ error: 'Invalid or missing API key' });
-  }
+  const { username } = req.query;
 
   if (!username) {
     return res.status(400).json({ error: 'Username is required' });
   }
 
   try {
-    // Step 1: Get userId from username
+    // Get user ID from username
     const userRes = await fetch('https://users.roblox.com/v1/usernames/users', {
       method: 'POST',
       headers: {
@@ -38,7 +32,7 @@ app.get('/getServer', async (req, res) => {
     const userId = userData.data?.[0]?.id;
     if (!userId) return res.status(404).json({ error: 'User not found' });
 
-    // Step 2: Get presence
+    // Get user presence
     const presenceRes = await fetch('https://presence.roblox.com/v1/presence/users', {
       method: 'POST',
       headers: {
@@ -55,15 +49,15 @@ app.get('/getServer', async (req, res) => {
       const joinLink = `https://www.roblox.com/games/${info.placeId}?jobId=${info.gameId}`;
       return res.json({ joinLink });
     } else {
-      return res.json({ error: 'User is not in a public game or cannot be accessed.' });
+      return res.json({ error: 'User is not in a public game or data is restricted' });
     }
 
   } catch (err) {
     console.error('Server error:', err);
-    return res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Roblox Join Server API running on port ${PORT}`);
+  console.log(`✅ Roblox Server Join API running on port ${PORT}`);
 });
