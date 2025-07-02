@@ -6,29 +6,34 @@ export default function Home() {
   const [error, setError] = useState('');
 
   async function handleSearch() {
-    setError('');
     setJoinLink('');
+    setError('');
+
     const res = await fetch(`/api/getServer?username=${username}`);
     const data = await res.json();
 
     if (data.joinLink) {
       setJoinLink(data.joinLink);
     } else {
-      setError(data.error || 'Something went wrong');
+      setError(data.error || 'Could not find user or server.');
     }
   }
 
   return (
-    <div style={{ padding: 40, fontFamily: 'Arial' }}>
+    <div style={{ padding: 40, fontFamily: 'Arial, sans-serif' }}>
       <h1>🔗 Roblox Server Joiner</h1>
+
       <input
         type="text"
         placeholder="Enter Roblox Username"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
-        style={{ padding: 10, width: '300px', marginRight: 10 }}
+        style={{ padding: 10, fontSize: 16, marginRight: 10 }}
       />
-      <button onClick={handleSearch} style={{ padding: 10 }}>Find Server</button>
+
+      <button onClick={handleSearch} style={{ padding: 10, fontSize: 16 }}>
+        Find Server
+      </button>
 
       {joinLink && (
         <div style={{ marginTop: 20 }}>
@@ -47,4 +52,3 @@ export default function Home() {
     </div>
   );
 }
-
