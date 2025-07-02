@@ -47,7 +47,9 @@ app.get('/getServer', async (req, res) => {
 
     if (info?.placeId && info?.gameId) {
       const joinLink = `https://www.roblox.com/games/${info.placeId}?jobId=${info.gameId}`;
-      return res.json({ joinLink });
+      const protocolLink = `roblox-player://game/${info.placeId}/0/${info.gameId}`;
+
+      return res.json({ joinLink, protocolLink });
     } else {
       return res.json({ error: 'User is not in a public game or data is restricted' });
     }
