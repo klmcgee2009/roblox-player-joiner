@@ -14,15 +14,16 @@ document.getElementById('joinBtn').addEventListener('click', async () => {
     const data = await res.json();
 
     if (data.joinLink) {
-      status.textContent = '✅ Found! Launching...';
+      status.textContent = '✅ Found! Opening Roblox...';
 
       const [placeId, jobId] = data.joinLink
         .split('/games/')[1]
         .split('?jobId=');
-
       const protocolUrl = `roblox-player://game/${placeId}/0/${jobId}`;
-      window.open(protocolUrl, '_self'); // open in current tab (no extra tabs)
 
+      // Open Roblox and close extension popup
+      window.open(protocolUrl, '_self');
+      window.close();
     } else {
       status.textContent = data.error || '⚠️ Could not find player or server.';
     }
