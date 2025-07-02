@@ -14,9 +14,19 @@ document.getElementById('joinBtn').addEventListener('click', async () => {
     const data = await res.json();
 
     if (data.joinLink) {
-      status.textContent = '✅ Found! Opening Roblox...';
-      // Use Roblox’s official page to trigger native prompt
-      window.location.href = data.joinLink;
+      status.textContent = '✅ Found! Launching Roblox...';
+
+      // STEP 1: Open the Roblox game page in a new tab
+      window.open(data.joinLink, '_blank');
+
+      // STEP 2: Launch the server directly using protocol
+      const [placeId, jobId] = data.joinLink.split('/games/')[1].split('?jobId=');
+      const protocolUrl = `roblox-player://game/${placeId}/0/${jobId}`;
+
+      setTimeout(() => {
+        window.location.href = protocolUrl;
+      }, 1200); // delay to let the game page open
+
     } else {
       status.textContent = data.error || '⚠️ Could not find server.';
     }
