@@ -2,11 +2,16 @@
   "manifest_version": 3,
   "name": "Roblox Server Joiner",
   "version": "1.0",
-  "description": "Join any Roblox user's server by typing their username.",
-  "permissions": ["scripting", "activeTab"],
-  "host_permissions": ["<all_urls>"],
   "action": {
-    "default_popup": "popup.html",
-    "default_icon": "icon.png"
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+    /* NO default_popup here */
+  },
+  "permissions": ["tabs", "storage"],
+  "background": {
+    "service_worker": "background.js"
   }
 }
