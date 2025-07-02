@@ -1,31 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Roblox Server Joiner</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      width: 100%;
-    }
-    input, button {
-      padding: 10px;
-      font-size: 16px;
-      width: 100%;
-      margin-bottom: 10px;
-    }
-    #status {
-      font-weight: bold;
-      color: #444;
-      min-height: 20px;
-    }
+    body { font-family: Arial, sans-serif; width: 250px; padding: 10px; }
+    input, button { width: 100%; padding: 8px; margin-top: 5px; }
+    #status { margin-top: 10px; min-height: 20px; }
   </style>
 </head>
 <body>
-  <h2>Join a Player's Server</h2>
-  <input type="text" id="username" placeholder="Enter Roblox username" />
-  <button id="joinBtn">Join Server</button>
-  <p id="status">🔹 Enter a username and click Join</p>
+  <h3>Join Roblox Player Server</h3>
+  <input type="text" id="username" placeholder="Enter target username" />
+  <button id="joinBtn">Join</button>
+  <div id="status"></div>
 
   <script src="popup.js"></script>
 </body>
