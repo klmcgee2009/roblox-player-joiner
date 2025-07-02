@@ -8,15 +8,15 @@ const POST_INTERVAL_MINUTES = parseInt(process.env.POST_INTERVAL_MINUTES) || 60;
 const SHOUT_MESSAGES = process.env.SHOUT_MESSAGES ? process.env.SHOUT_MESSAGES.split(',').map(msg => msg.trim()) : [];
 
 if (!ROBLOX_COOKIE) {
-  console.error('Missing .ROBLOSECURITY cookie in .env');
+  console.error('Missing ROBLOX_COOKIE environment variable');
   process.exit(1);
 }
 if (GROUP_IDS.length === 0) {
-  console.error('No GROUP_IDS specified in .env');
+  console.error('No GROUP_IDS specified');
   process.exit(1);
 }
 if (SHOUT_MESSAGES.length === 0) {
-  console.error('No SHOUT_MESSAGES specified in .env');
+  console.error('No SHOUT_MESSAGES specified');
   process.exit(1);
 }
 
