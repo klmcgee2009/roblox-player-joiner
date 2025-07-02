@@ -6,5 +6,5 @@
     "default_popup": "popup.html",
     "default_icon": "icon.png"
   },
-  "permissions": ["storage"]
+  "permissions": ["storage", "windows"]
 }
