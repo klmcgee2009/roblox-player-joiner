@@ -1,33 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <title>Roblox Server Joiner</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      padding: 16px;
-      width: 280px;  /* Wider for better fit */
-      box-sizing: border-box;
+      margin: 15px;
+      width: 400px;
     }
     input, button {
+      padding: 10px;
+      font-size: 16px;
       width: 100%;
-      padding: 8px;
-      margin-top: 10px;
-      font-size: 14px;
       box-sizing: border-box;
+      margin: 10px 0;
     }
-    p {
-      font-size: 12px;
-      margin-top: 8px;
-      word-wrap: break-word;       /* Wrap long text */
-      white-space: normal;          /* Allow wrapping */
-      max-height: 60px;             /* Limit height */
-      overflow-y: auto;             /* Scroll if overflow */
+    #status {
+      min-height: 24px;
+      font-weight: bold;
+      color: #333;
     }
   </style>
 </head>
 <body>
-  <h3>Join Roblox Player</h3>
-  <input id="username" type="text" placeholder="Enter Roblox username" />
+  <h2>Join a Roblox Player's Server</h2>
+  <input id="username" placeholder="Enter Roblox username" />
   <button id="joinBtn">Join Server</button>
   <p id="status"></p>
 
