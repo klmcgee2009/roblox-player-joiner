@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Roblox Wall Poster Settings</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <h2>Roblox Group Wall Auto Poster</h2>
+  <label>Group URLs (one per line):</label><br/>
+  <textarea id="groupUrls" rows="4" placeholder="https://www.roblox.com/groups/1234567"></textarea><br/>
+
+  <label>Messages (one per line):</label><br/>
+  <textarea id="messages" rows="6" placeholder="Hello!&#10;Check out our game!"></textarea><br/>
+
+  <label>Post Interval (minutes):</label><br/>
+  <input type="number" id="interval" min="1" value="60"/><br/><br/>
+
+  <button id="startBtn">Start Posting</button>
+  <button id="stopBtn">Stop Posting</button>
+
+  <div id="status"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
