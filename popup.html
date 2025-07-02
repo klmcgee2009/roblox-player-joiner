@@ -3,16 +3,24 @@
 <head>
   <style>
     body { font-family: Arial, sans-serif; width: 250px; padding: 10px; }
-    input, button { width: 100%; padding: 8px; margin-top: 5px; }
-    #status { margin-top: 10px; min-height: 20px; }
+    button { width: 100%; padding: 8px; margin-top: 10px; }
   </style>
 </head>
 <body>
-  <h3>Join Roblox Player Server</h3>
-  <input type="text" id="username" placeholder="Enter target username" />
-  <button id="joinBtn">Join</button>
-  <div id="status"></div>
+  <h3>Roblox Alt Joiner</h3>
+  <button id="openFullUI">Open Full Joiner</button>
 
-  <script src="popup.js"></script>
+  <script>
+    document.getElementById('openFullUI').addEventListener('click', () => {
+      chrome.windows.create({
+        url: chrome.runtime.getURL('full-ui.html'),
+        type: 'popup',
+        width: 400,
+        height: 400,
+        top: 100,
+        left: 100
+      });
+    });
+  </script>
 </body>
 </html>
