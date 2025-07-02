@@ -10,7 +10,7 @@ document.getElementById('joinBtn').addEventListener('click', async () => {
   status.textContent = '🔎 Searching...';
 
   try {
-    const res = await fetch(`https://roblox-player-joiner.onrender.com/getServer?username=${username}`);
+    const res = await fetch(`https://roblox-player-joiner.onrender.com/getServer?username=${encodeURIComponent(username)}`);
     const data = await res.json();
 
     if (data.joinLink) {
@@ -21,9 +21,9 @@ document.getElementById('joinBtn').addEventListener('click', async () => {
         .split('?jobId=');
       const protocolUrl = `roblox-player://game/${placeId}/0/${jobId}`;
 
-      // Open Roblox and close extension popup
-      window.open(protocolUrl, '_self');
-      window.close();
+      // Open Roblox protocol URL
+      window.location.href = protocolUrl;
+
     } else {
       status.textContent = data.error || '⚠️ Could not find player or server.';
     }
