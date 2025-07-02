@@ -5,17 +5,16 @@
   "description": "Automatically posts messages to your Roblox group walls.",
   "permissions": ["storage", "tabs", "scripting", "activeTab"],
   "action": {
-    "default_popup": "popup.html",
-    "default_icon": {
-      "16": "icon16.png",
-      "48": "icon48.png",
-      "128": "icon128.png"
-    }
+    "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js"
   },
-  "host_permissions": [
-    "https://www.roblox.com/groups/*"
+  "host_permissions": ["https://www.roblox.com/groups/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.roblox.com/groups/*"],
+      "js": ["content.js"]
+    }
   ]
 }
