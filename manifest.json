@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Roblox Server Joiner",
   "version": "1.0",
-  "description": "Join any Roblox user's server via username.",
+  "description": "Join any Roblox user's server by typing their username.",
   "permissions": ["scripting", "activeTab"],
   "host_permissions": ["<all_urls>"],
   "action": {
