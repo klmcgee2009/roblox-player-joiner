@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Join Roblox Server</title>
+</head>
+<body>
+  <h1>Join Roblox Player's Server</h1>
+  <input type="text" id="username" placeholder="Enter Roblox Username" />
+  <button id="joinBtn">Join Server</button>
+
+  <script>
+    const joinBtn = document.getElementById('joinBtn');
+    joinBtn.onclick = async () => {
+      const username = document.getElementById('username').value.trim();
+      if (!username) {
+        alert('Please enter a username.');
+        return;
+      }
+
+      // Call your API here - change to your deployed API URL
+      const apiUrl = `https://roblox-player-joiner.onrender.com/getServer?username=${encodeURIComponent(username)}`;
+
+      try {
+        const res = await fetch(apiUrl);
+        const data = await res.json();
+
+        if (data.error) {
+          alert('Error: ' + data.error);
+          return;
+        }
+
+        // Try to open protocol URL first
+        const protocolLink = data.protocolLink;
+        const httpLink = data.joinLink;
+
+        // Attempt protocol URL open
+        window.location = protocolLink;
+
+        // Fallback: open HTTP URL after delay
+        setTimeout(() => {
+          window.open(httpLink, '_blank');
+        }, 1500);
+
+      } catch (e) {
+        alert('Failed to fetch server info.');
+        console.error(e);
+      }
+    };
+  </script>
+</body>
+</html>
