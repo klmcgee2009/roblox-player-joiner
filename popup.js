@@ -14,14 +14,20 @@ document.getElementById('joinBtn').addEventListener('click', async () => {
     const data = await res.json();
 
     if (data.joinLink) {
-      status.textContent = '✅ Found! Joining...';
-      // Attempt to open Roblox via protocol
-      window.location.href = `roblox-player://game/${data.joinLink.split('/games/')[1].replace('?jobId=', '/0/')}`;
+      status.textContent = '✅ Found! Launching...';
+
+      const [placeId, jobId] = data.joinLink
+        .split('/games/')[1]
+        .split('?jobId=');
+
+      const protocolUrl = `roblox-player://game/${placeId}/0/${jobId}`;
+      window.open(protocolUrl, '_self'); // open in current tab (no extra tabs)
+
     } else {
-      status.textContent = data.error || '⚠️ Could not find server.';
+      status.textContent = data.error || '⚠️ Could not find player or server.';
     }
   } catch (err) {
-    status.textContent = '❌ API error';
     console.error(err);
+    status.textContent = '❌ Error contacting server.';
   }
 });
