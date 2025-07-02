@@ -1,123 +1,87 @@
-require('dotenv').config();
-const axios = require('axios');
-const schedule = require('node-schedule');
+require("dotenv").config();
+const axios = require("axios");
+const schedule = require("node-schedule");
 
 const ROBLOX_COOKIE = process.env.ROBLOX_COOKIE;
-const GROUP_IDS = process.env.GROUP_IDS ? process.env.GROUP_IDS.split(',').map(id => id.trim()) : [];
+const GROUP_IDS = process.env.GROUP_IDS?.split(",").map(id => id.trim()) || [];
+const SHOUT_MESSAGES = process.env.SHOUT_MESSAGES?.split(",").map(msg => msg.trim()) || [];
 const POST_INTERVAL_MINUTES = parseInt(process.env.POST_INTERVAL_MINUTES) || 60;
-const SHOUT_MESSAGES = process.env.SHOUT_MESSAGES ? process.env.SHOUT_MESSAGES.split(',').map(msg => msg.trim()) : [];
 
-if (!ROBLOX_COOKIE) {
-  console.error('Missing ROBLOX_COOKIE environment variable');
-  process.exit(1);
-}
-if (GROUP_IDS.length === 0) {
-  console.error('No GROUP_IDS specified');
-  process.exit(1);
-}
-if (SHOUT_MESSAGES.length === 0) {
-  console.error('No SHOUT_MESSAGES specified');
+if (!ROBLOX_COOKIE || GROUP_IDS.length === 0 || SHOUT_MESSAGES.length === 0) {
+  console.error("❌ Missing required environment variables.");
   process.exit(1);
 }
 
-// Track used messages per group to avoid repeats
 const usedMessages = {};
 GROUP_IDS.forEach(groupId => {
   usedMessages[groupId] = new Set();
 });
 
 const axiosInstance = axios.create({
-  baseURL: 'https://www.roblox.com',
   headers: {
-    Cookie: `.ROBLOSECURITY=${ROBLOX_COOKIE}`,
-    'User-Agent': 'Mozilla/5.0',
+    "Cookie": `.ROBLOSECURITY=${ROBLOX_COOKIE}`,
+    "User-Agent": "Mozilla/5.0",
   },
   withCredentials: true,
 });
 
 async function getCsrfToken() {
   try {
-    await axiosInstance.post('/chat/api/get-auth-token');
-  } catch (error) {
-    const token = error.response.headers['x-csrf-token'];
-    if (!token) throw new Error('Failed to get CSRF token');
+    await axiosInstance.post("https://auth.roblox.com/v2/logout");
+  } catch (err) {
+    const token = err.response?.headers["x-csrf-token"];
+    if (!token) throw new Error("Failed to retrieve CSRF token.");
+    axiosInstance.defaults.headers.common["x-csrf-token"] = token;
     return token;
   }
-  throw new Error('Unexpected success on get-auth-token request');
 }
 
-function pickMessageForGroup(groupId) {
-  const usedSet = usedMessages[groupId];
+function pickMessage(groupId) {
+  const used = usedMessages[groupId];
+  const available = SHOUT_MESSAGES.filter(m => !used.has(m));
 
-  // Messages not used yet for this group
-  const unusedMessages = SHOUT_MESSAGES.filter((msg) => !usedSet.has(msg));
-
-  // If all messages have been used, reset for this group
-  if (unusedMessages.length === 0) {
+  if (available.length === 0) {
     usedMessages[groupId] = new Set();
-    return pickMessageForGroup(groupId); // recurse after reset
+    return pickMessage(groupId);
   }
 
-  // Pick a random unused message
-  const message = unusedMessages[Math.floor(Math.random() * unusedMessages.length)];
-
-  // Mark it as used
-  usedMessages[groupId].add(message);
-
+  const message = available[Math.floor(Math.random() * available.length)];
+  used.add(message);
   return message;
 }
 
-async function postGroupShout(csrfToken, groupId, message) {
+async function postToGroupWall(groupId, message) {
   try {
-    const res = await axiosInstance.post(
-      `/groups/api/groups/${groupId}/status`,
-      { body: message },
-      {
-        headers: {
-          'x-csrf-token': csrfToken,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const res = await axiosInstance.post(`https://groups.roblox.com/v1/groups/${groupId}/wall/posts`, {
+      body: message
+    });
+
     if (res.status === 200) {
-      console.log(`✅ Posted shout to group ${groupId} at ${new Date().toLocaleString()}`);
+      console.log(`✅ Posted to group wall ${groupId}: "${message}"`);
     } else {
-      console.error(`❌ Failed to post shout to group ${groupId}`, res.status, res.data);
+      console.error(`❌ Failed to post to group wall ${groupId}: ${res.status}`);
     }
   } catch (error) {
-    if (error.response && error.response.status === 403) {
-      console.warn('CSRF token expired or invalid. Refreshing token and retrying...');
-      const newToken = await getCsrfToken();
-      return postGroupShout(newToken, groupId, message);
-    }
-    console.error(`Error posting shout to group ${groupId}:`, error.message);
+    console.error(`❌ Error posting to group ${groupId}:`, error.response?.data || error.message);
   }
 }
 
-async function postAllGroups() {
-  let csrfToken;
-  try {
-    csrfToken = await getCsrfToken();
-  } catch (error) {
-    console.error('Error getting CSRF token:', error.message);
-    return;
-  }
-
+async function postToAllGroups() {
+  await getCsrfToken();
   for (const groupId of GROUP_IDS) {
-    const message = pickMessageForGroup(groupId);
-    await postGroupShout(csrfToken, groupId, message);
+    const msg = pickMessage(groupId);
+    await postToGroupWall(groupId, msg);
   }
 }
 
-async function runBot() {
-  console.log('🚀 Starting Roblox Group Shout Bot...');
-  await postAllGroups();
+async function run() {
+  console.log("🚀 Group Wall Bot started...");
+  await postToAllGroups();
 
-  // Schedule posts every POST_INTERVAL_MINUTES
   schedule.scheduleJob(`*/${POST_INTERVAL_MINUTES} * * * *`, async () => {
-    console.log('⏰ Scheduled post: posting shouts to all groups...');
-    await postAllGroups();
+    console.log(`⏰ Posting again at ${new Date().toLocaleTimeString()}`);
+    await postToAllGroups();
   });
 }
 
-runBot();
+run();
